@@ -1,0 +1,78 @@
+[tool.poetry]
+name = "multivault"
+version = "0.1.6"
+description = "MultiVault Backend Service - Non-custodial Multisig Wallet Manager"
+authors = ["MultiVault Team"]
+readme = "README.md"
+packages = [{ include = "multivault", from = "src" }]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+
+# Web Framework
+fastapi = "^0.115"
+uvicorn = { extras = ["standard"], version = "^0.32" }
+pydantic = "^2.10"
+pydantic-settings = "^2.6"
+
+# Database
+sqlalchemy = { extras = ["asyncio"], version = "^2.0" }
+aiosqlite = "^0.20"
+alembic = "^1.14"
+
+# Crypto & Chain
+embit = "^0.8"
+web3 = "^7.6"
+
+# Utils
+httpx = "^0.28"
+python-multipart = "^0.0.20"
+structlog = "^24.4"
+coincurve = "^21.0.0"
+greenlet = "^3.3.2"
+cryptography = "^46.0.5"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3"
+pytest-asyncio = "^0.24"
+pytest-cov = "^6.0"
+ruff = "^0.8"
+mypy = "^1.13"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # Pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+]
+ignore = ["E501"]  # line too long, handled by formatter
+
+[tool.ruff.lint.isort]
+known-first-party = ["multivault"]
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+plugins = ["pydantic.mypy"]
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

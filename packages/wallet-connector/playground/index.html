@@ -1,0 +1,1171 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MultiVault Wallet SDK Playground</title>
+  <!-- Buffer polyfill for Ledger libraries -->
+  <script type="module">
+    import { Buffer } from 'buffer';
+    window.Buffer = Buffer;
+  </script>
+  <style>
+    :root {
+      --primary: #3b82f6;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --bg: #0f172a;
+      --card: #1e293b;
+      --border: #334155;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    header h1 {
+      font-size: 2rem;
+      margin-bottom: 8px;
+    }
+
+    header p {
+      color: var(--muted);
+    }
+
+    .wallet-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+      border-bottom: 2px solid var(--border);
+      padding-bottom: 0;
+    }
+
+    .wallet-tab {
+      padding: 12px 24px;
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 1rem;
+      font-weight: 500;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .wallet-tab:hover {
+      color: var(--text);
+    }
+
+    .wallet-tab.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+    }
+
+    .wallet-tab .tab-status {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--danger);
+    }
+
+    .wallet-tab .tab-status.connected {
+      background: var(--success);
+    }
+
+    .wallet-panel {
+      display: none;
+    }
+
+    .wallet-panel.active {
+      display: block;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+
+    .card h2 {
+      font-size: 1.25rem;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .card h2 .icon {
+      font-size: 1.5rem;
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 500;
+    }
+
+    .status.disconnected {
+      background: rgba(239, 68, 68, 0.2);
+      color: var(--danger);
+    }
+
+    .status.connected {
+      background: rgba(34, 197, 94, 0.2);
+      color: var(--success);
+    }
+
+    .status.connecting {
+      background: rgba(245, 158, 11, 0.2);
+      color: var(--warning);
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: #2563eb;
+    }
+
+    .btn-success {
+      background: var(--success);
+      color: white;
+    }
+
+    .btn-danger {
+      background: var(--danger);
+      color: white;
+    }
+
+    .btn-secondary {
+      background: var(--border);
+      color: var(--text);
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 20px;
+    }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: 140px 1fr;
+      gap: 12px 16px;
+      margin-bottom: 20px;
+      padding: 16px;
+      background: var(--bg);
+      border-radius: 8px;
+    }
+
+    .info-grid .label {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .info-grid .value {
+      font-family: 'Monaco', 'Menlo', monospace;
+      font-size: 0.85rem;
+      word-break: break-all;
+      color: var(--text);
+    }
+
+    .info-grid .value.mono-small {
+      font-size: 0.8rem;
+    }
+
+    .log-container {
+      background: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      height: 250px;
+      overflow-y: auto;
+      font-family: 'Monaco', 'Menlo', monospace;
+      font-size: 0.8rem;
+      line-height: 1.6;
+    }
+
+    .log-entry {
+      padding: 4px 0;
+    }
+
+    .log-entry.info {
+      color: var(--primary);
+    }
+
+    .log-entry.success {
+      color: var(--success);
+    }
+
+    .log-entry.warning {
+      color: var(--warning);
+    }
+
+    .log-entry.error {
+      color: var(--danger);
+    }
+
+    .log-time {
+      color: var(--muted);
+      margin-right: 8px;
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .input-group {
+      margin-bottom: 16px;
+    }
+
+    .input-group:last-child {
+      margin-bottom: 0;
+    }
+
+    .input-group label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+
+    .input-group input,
+    .input-group textarea,
+    .input-group select {
+      width: 100%;
+      padding: 10px 14px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 0.9rem;
+      font-family: inherit;
+    }
+
+    .input-group textarea {
+      min-height: 80px;
+      resize: vertical;
+    }
+
+    .input-group input:focus,
+    .input-group textarea:focus,
+    .input-group select:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+
+    .signature-result {
+      margin-top: 16px;
+      padding: 12px;
+      background: rgba(34, 197, 94, 0.1);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      border-radius: 8px;
+      word-break: break-all;
+      font-family: 'Monaco', 'Menlo', monospace;
+      font-size: 0.75rem;
+    }
+
+    .header-actions {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .section-title {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: var(--muted);
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .connecting .dot {
+      animation: pulse 1s infinite;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🔐 MultiVault Wallet SDK Playground</h1>
+      <p>测试 Ledger、MetaMask、WalletConnect 钱包连接和签名功能</p>
+    </header>
+
+    <!-- Wallet Tabs -->
+    <div class="wallet-tabs">
+      <button class="wallet-tab active" onclick="switchWalletTab('ledger')">
+        🔒 Ledger
+        <span id="ledger-tab-status" class="tab-status"></span>
+      </button>
+      <button class="wallet-tab" onclick="switchWalletTab('metamask')">
+        🦊 MetaMask
+        <span id="metamask-tab-status" class="tab-status"></span>
+      </button>
+      <button class="wallet-tab" onclick="switchWalletTab('walletconnect')">
+        📱 WalletConnect
+        <span id="wc-tab-status" class="tab-status"></span>
+      </button>
+    </div>
+
+    <!-- Ledger Panel -->
+    <div id="ledger-panel" class="wallet-panel active">
+      <div class="card">
+        <div class="header-actions">
+          <h2><span class="icon">🔒</span> Ledger Hardware Wallet</h2>
+          <span id="ledger-status" class="status disconnected">
+            <span class="dot"></span>
+            未连接
+          </span>
+        </div>
+
+        <div id="ledger-info" style="display: none;">
+          <div class="info-grid">
+            <span class="label">地址</span>
+            <span class="value" id="ledger-address">-</span>
+            <span class="label">公钥 (压缩)</span>
+            <span class="value mono-small" id="ledger-pubkey">-</span>
+            <span class="label">xpub</span>
+            <span class="value mono-small" id="ledger-xpub">-</span>
+            <span class="label">链</span>
+            <span class="value" id="ledger-chain">-</span>
+            <span class="label">派生路径</span>
+            <span class="value" id="ledger-path">-</span>
+            <span class="label" id="ledger-fingerprint-label" style="display: none;">Master Fingerprint</span>
+            <span class="value" id="ledger-fingerprint" style="display: none;">-</span>
+          </div>
+        </div>
+
+        <div class="section-title">连接设置</div>
+        <div class="form-row">
+          <div class="input-group">
+            <label>选择链</label>
+            <select id="ledger-chain-select">
+              <option value="ETHEREUM">Ethereum</option>
+              <option value="BITCOIN">Bitcoin</option>
+            </select>
+          </div>
+          <div class="input-group">
+            <label>派生路径 (Account Level)</label>
+            <input type="text" id="ledger-derivation-path" value="m/44'/60'/0'/0" placeholder="例如: m/84'/0'/0'">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="input-group">
+            <label>地址索引 (addressIndex)</label>
+            <input type="number" id="ledger-address-index" value="0" min="0" max="999999">
+          </div>
+          <div class="input-group">
+            <label>Change (BTC only)</label>
+            <select id="ledger-change">
+              <option value="0">0 (外部/接收)</option>
+              <option value="1">1 (内部/找零)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="section-title">签名测试</div>
+        <div class="input-group">
+          <label>签名消息</label>
+          <input type="text" id="ledger-message" value="Hello from Ledger!" placeholder="输入要签名的消息">
+        </div>
+
+        <div id="ledger-signature" class="signature-result" style="display: none;"></div>
+
+        <div class="btn-group">
+          <button id="ledger-connect" class="btn btn-primary" onclick="connectLedger()">
+            连接设备
+          </button>
+          <button id="ledger-get-address" class="btn btn-secondary" onclick="getLedgerAddress()" disabled>
+            获取地址
+          </button>
+          <button id="ledger-sign" class="btn btn-success" onclick="signWithLedger()" disabled>
+            签名消息
+          </button>
+          <button id="ledger-disconnect" class="btn btn-danger" onclick="disconnectLedger()" disabled>
+            断开
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MetaMask Panel -->
+    <div id="metamask-panel" class="wallet-panel">
+      <div class="card">
+        <div class="header-actions">
+          <h2><span class="icon">🦊</span> MetaMask</h2>
+          <span id="metamask-status" class="status disconnected">
+            <span class="dot"></span>
+            未连接
+          </span>
+        </div>
+
+        <div id="metamask-info" style="display: none;">
+          <div class="info-grid">
+            <span class="label">地址</span>
+            <span class="value" id="metamask-address">-</span>
+            <span class="label">链</span>
+            <span class="value" id="metamask-chain">-</span>
+          </div>
+        </div>
+
+        <div class="section-title">签名测试</div>
+        <div class="input-group">
+          <label>签名消息</label>
+          <input type="text" id="metamask-message" value="Hello, MultiVault!" placeholder="输入要签名的消息">
+        </div>
+
+        <div id="metamask-signature" class="signature-result" style="display: none;"></div>
+
+        <div class="btn-group">
+          <button id="metamask-connect" class="btn btn-primary" onclick="connectMetaMask()">
+            连接
+          </button>
+          <button id="metamask-sign" class="btn btn-success" onclick="signWithMetaMask()" disabled>
+            签名消息
+          </button>
+          <button id="metamask-disconnect" class="btn btn-danger" onclick="disconnectMetaMask()" disabled>
+            断开
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- WalletConnect Panel -->
+    <div id="walletconnect-panel" class="wallet-panel">
+      <div class="card">
+        <div class="header-actions">
+          <h2><span class="icon">📱</span> WalletConnect</h2>
+          <span id="wc-status" class="status disconnected">
+            <span class="dot"></span>
+            未连接
+          </span>
+        </div>
+
+        <div id="wc-info" style="display: none;">
+          <div class="info-grid">
+            <span class="label">地址</span>
+            <span class="value" id="wc-address">-</span>
+            <span class="label">链</span>
+            <span class="value" id="wc-chain">-</span>
+            <span class="label">钱包</span>
+            <span class="value" id="wc-wallet">-</span>
+          </div>
+        </div>
+
+        <div class="section-title">连接设置</div>
+        <div class="input-group">
+          <label>WalletConnect Project ID</label>
+          <input type="text" id="wc-project-id" placeholder="输入你的 Project ID">
+        </div>
+
+        <div class="section-title">签名测试</div>
+        <div class="input-group">
+          <label>签名消息</label>
+          <input type="text" id="wc-message" value="Hello from WalletConnect!" placeholder="输入要签名的消息">
+        </div>
+
+        <div id="wc-signature" class="signature-result" style="display: none;"></div>
+
+        <div class="btn-group">
+          <button id="wc-connect" class="btn btn-primary" onclick="connectWalletConnect()">
+            连接
+          </button>
+          <button id="wc-sign" class="btn btn-success" onclick="signWithWalletConnect()" disabled>
+            签名消息
+          </button>
+          <button id="wc-disconnect" class="btn btn-danger" onclick="disconnectWalletConnect()" disabled>
+            断开
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Log Panel -->
+    <div class="card">
+      <div class="header-actions">
+        <h2><span class="icon">📋</span> 日志</h2>
+        <button class="btn btn-secondary" onclick="clearLogs()">清除</button>
+      </div>
+      <div id="log-container" class="log-container">
+        <div class="log-entry info">
+          <span class="log-time">[--:--:--]</span>
+          等待 SDK 加载...
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    // Import SDK - Vite will resolve this
+    import * as SDK from '@multivault/wallet-connector';
+
+    // Expose to window for onclick handlers
+    window.SDK = SDK;
+
+    // Provider instances
+    let metamaskProvider = null;
+    let ledgerProvider = null;
+    let walletConnectProvider = null;
+    
+    // Prevent double-click
+    let ledgerOperationInProgress = false;
+
+    // ─── Tab Switching ─────────────────────────────────────────────────────
+
+    window.switchWalletTab = function(wallet) {
+      // Update tab buttons
+      document.querySelectorAll('.wallet-tab').forEach(tab => {
+        tab.classList.remove('active');
+      });
+      document.querySelector(`.wallet-tab[onclick*="${wallet}"]`).classList.add('active');
+
+      // Update panels
+      document.querySelectorAll('.wallet-panel').forEach(panel => {
+        panel.classList.remove('active');
+      });
+      document.getElementById(`${wallet}-panel`).classList.add('active');
+    };
+
+    function updateTabStatus(prefix, connected) {
+      const tabStatus = document.getElementById(`${prefix}-tab-status`);
+      if (tabStatus) {
+        if (connected) {
+          tabStatus.classList.add('connected');
+        } else {
+          tabStatus.classList.remove('connected');
+        }
+      }
+    }
+
+    // ─── Logging ───────────────────────────────────────────────────────────
+
+    function log(message, type = 'info') {
+      const container = document.getElementById('log-container');
+      const entry = document.createElement('div');
+      entry.className = `log-entry ${type}`;
+
+      const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+      entry.innerHTML = `<span class="log-time">[${time}]</span>${escapeHtml(message)}`;
+
+      container.appendChild(entry);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    window.clearLogs = function() {
+      document.getElementById('log-container').innerHTML = '';
+      log('日志已清除');
+    };
+
+    // ─── Status Helpers ────────────────────────────────────────────────────
+
+    function updateStatus(prefix, state, text) {
+      const el = document.getElementById(`${prefix}-status`);
+      el.className = `status ${state}`;
+      el.innerHTML = `<span class="dot"></span>${text}`;
+      
+      // Also update tab status
+      updateTabStatus(prefix, state === 'connected');
+    }
+
+    function showInfo(prefix, show) {
+      document.getElementById(`${prefix}-info`).style.display = show ? 'block' : 'none';
+    }
+
+    function setButtons(prefix, connected) {
+      document.getElementById(`${prefix}-connect`).disabled = connected;
+      document.getElementById(`${prefix}-sign`).disabled = !connected;
+      document.getElementById(`${prefix}-disconnect`).disabled = !connected;
+    }
+
+    function showSignature(prefix, signature) {
+      const el = document.getElementById(`${prefix}-signature`);
+      el.style.display = 'block';
+      el.textContent = signature;
+    }
+
+    function hideSignature(prefix) {
+      document.getElementById(`${prefix}-signature`).style.display = 'none';
+    }
+
+    // ─── MetaMask ──────────────────────────────────────────────────────────
+
+    window.connectMetaMask = async function() {
+      try {
+        log('正在初始化 MetaMask...', 'info');
+        updateStatus('metamask', 'connecting', '连接中...');
+
+        metamaskProvider = new SDK.MetaMaskProvider();
+        await metamaskProvider.init();
+        log('MetaMask provider 初始化成功', 'success');
+
+        // Setup event listeners
+        metamaskProvider.on('accountChange', ({ currentAccount }) => {
+          log(`账户变更: ${currentAccount?.address || 'none'}`, 'warning');
+          if (currentAccount) {
+            document.getElementById('metamask-address').textContent = currentAccount.address;
+          }
+        });
+
+        metamaskProvider.on('chainChange', ({ currentChainId }) => {
+          log(`链变更: ${currentChainId}`, 'warning');
+          document.getElementById('metamask-chain').textContent = `Chain ID: ${currentChainId}`;
+        });
+
+        metamaskProvider.on('disconnect', ({ reason }) => {
+          log(`MetaMask 断开: ${reason}`, 'warning');
+          updateStatus('metamask', 'disconnected', '未连接');
+          showInfo('metamask', false);
+          setButtons('metamask', false);
+          hideSignature('metamask');
+        });
+
+        const account = await metamaskProvider.connect({
+          chain: 'ETHEREUM',
+          evmChainId: 1,
+        });
+
+        log(`MetaMask 已连接: ${account.address}`, 'success');
+
+        document.getElementById('metamask-address').textContent = account.address;
+        document.getElementById('metamask-chain').textContent = account.chain;
+
+        updateStatus('metamask', 'connected', '已连接');
+        showInfo('metamask', true);
+        setButtons('metamask', true);
+        hideSignature('metamask');
+
+      } catch (error) {
+        log(`MetaMask 错误: ${error.message}`, 'error');
+        updateStatus('metamask', 'disconnected', '连接失败');
+        setButtons('metamask', false);
+      }
+    };
+
+    window.signWithMetaMask = async function() {
+      if (!metamaskProvider || !metamaskProvider.account) {
+        log('MetaMask 未连接', 'error');
+        return;
+      }
+
+      const message = document.getElementById('metamask-message').value;
+      if (!message) {
+        log('请输入要签名的消息', 'warning');
+        return;
+      }
+
+      try {
+        log(`正在签名消息: "${message}"`, 'info');
+        const result = await metamaskProvider.signMessage(message, metamaskProvider.account);
+        log(`签名成功!`, 'success');
+        showSignature('metamask', result.signature);
+      } catch (error) {
+        log(`签名失败: ${error.message}`, 'error');
+      }
+    };
+
+    window.disconnectMetaMask = async function() {
+      if (metamaskProvider) {
+        await metamaskProvider.disconnect();
+        metamaskProvider = null;
+        log('MetaMask 已断开', 'info');
+        updateStatus('metamask', 'disconnected', '未连接');
+        showInfo('metamask', false);
+        setButtons('metamask', false);
+        hideSignature('metamask');
+      }
+    };
+
+    // ─── Ledger ────────────────────────────────────────────────────────────
+
+    // Update default path when chain changes
+    document.getElementById('ledger-chain-select').addEventListener('change', function(e) {
+      const chain = e.target.value;
+      const pathInput = document.getElementById('ledger-derivation-path');
+      if (chain === 'BITCOIN') {
+        pathInput.value = "m/84'/0'/0'";
+      } else {
+        pathInput.value = "m/44'/60'/0'/0";
+      }
+    });
+
+    // Track if we need to retry after app open
+    let ledgerRetryPending = false;
+    let ledgerRetryCount = 0;
+    const MAX_RETRY = 3;
+
+    window.connectLedger = async function() {
+      // Prevent double-click
+      if (ledgerOperationInProgress) {
+        log('操作进行中，请稍候...', 'warning');
+        return;
+      }
+      ledgerOperationInProgress = true;
+
+      try {
+        // If already connected and same chain, just get new address
+        if (ledgerProvider && ledgerProvider.state === 'CONNECTED') {
+          const selectedChain = document.getElementById('ledger-chain-select').value;
+          if (ledgerProvider.currentChain === selectedChain) {
+            await getLedgerAddressInternal();
+            return;
+          }
+          // Different chain - need to disconnect and reconnect
+          log(`切换链: ${ledgerProvider.currentChain} -> ${selectedChain}`, 'info');
+          await ledgerProvider.disconnect();
+          ledgerProvider = null;
+        }
+
+        // Cleanup any existing provider first
+        if (ledgerProvider) {
+          try {
+            await ledgerProvider.disconnect();
+          } catch (e) {
+            // Ignore disconnect errors
+          }
+          ledgerProvider = null;
+        }
+
+        log('正在初始化 Ledger...', 'info');
+        updateStatus('ledger', 'connecting', '连接中...');
+
+        await connectLedgerInternal();
+
+      } catch (error) {
+        handleLedgerError(error);
+      } finally {
+        ledgerOperationInProgress = false;
+      }
+    };
+
+    async function connectLedgerInternal() {
+      ledgerProvider = new SDK.LedgerProvider({
+        transportType: 'webhid',
+        autoReconnect: true,
+      });
+
+      await ledgerProvider.init();
+      log('Ledger provider 初始化成功', 'success');
+
+      // Setup event listeners (only once per provider instance)
+      ledgerProvider.on('disconnect', ({ reason }) => {
+        // Only log if not expecting a reconnect
+        if (!ledgerRetryPending) {
+          log(`Ledger 断开: ${reason}`, 'warning');
+          updateStatus('ledger', 'disconnected', '未连接');
+          showInfo('ledger', false);
+          setLedgerButtons(false, false);
+          hideSignature('ledger');
+        }
+        ledgerProvider = null;
+      });
+
+      // App change events (auto-open app)
+      ledgerProvider.on('appChange', ({ requiredApp, currentApp, action }) => {
+        if (action === 'quitting') {
+          log(`正在退出 ${currentApp} App，准备打开 ${requiredApp}...`, 'info');
+        } else if (action === 'opening') {
+          log(`正在请求打开 ${requiredApp} App...`, 'info');
+          log('请在 Ledger 设备上确认打开 App', 'warning');
+        }
+      });
+
+      // Get address with current settings
+      await getLedgerAddressInternal();
+    }
+
+    function handleLedgerError(error) {
+      // Check if this is an "app opening" or "app quitting" disconnect - need to retry
+      if (error.code === SDK.WalletErrorCode.DEVICE_DISCONNECTED && 
+          (error.message?.includes('正在打开') || error.message?.includes('正在退出'))) {
+        
+        if (error.message?.includes('正在退出')) {
+          log('正在退出当前 App，等待设备重新连接...', 'info');
+        } else {
+          log('App 已请求打开，等待设备重新连接...', 'info');
+        }
+        
+        ledgerRetryPending = true;
+        ledgerRetryCount = 0;
+        
+        // Show retry prompt
+        updateStatus('ledger', 'connecting', '等待重连...');
+        log('请在设备上确认后，点击"连接设备"重试', 'warning');
+        setLedgerButtons(false, false);
+        document.getElementById('ledger-connect').disabled = false;
+        
+        // Cleanup the disconnected provider
+        ledgerProvider = null;
+        return;
+      }
+
+      // Check if we should suggest manual app switch
+      if (error.code === SDK.WalletErrorCode.LEDGER_APP_NOT_OPEN) {
+        log(error.message, 'warning');
+        updateStatus('ledger', 'disconnected', '需要切换 App');
+        setLedgerButtons(false, false);
+        
+        // Cleanup
+        if (ledgerProvider) {
+          ledgerProvider.disconnect().catch(() => {});
+          ledgerProvider = null;
+        }
+        return;
+      }
+
+      // Standard error handling
+      log(`Ledger 错误: ${error.message}`, 'error');
+
+      if (error.code === SDK.WalletErrorCode.BROWSER_NOT_SUPPORTED) {
+        log('WebHID 不支持此浏览器，请使用 Chrome/Edge', 'error');
+      } else if (error.code === SDK.WalletErrorCode.DEVICE_NOT_FOUND) {
+        log('未找到 Ledger 设备，请连接设备后重试', 'error');
+      } else if (error.code === SDK.WalletErrorCode.WRONG_APP) {
+        log('请在 Ledger 上打开正确的应用', 'error');
+      } else if (error.message?.includes('already open')) {
+        log('设备正在使用中，请刷新页面后重试', 'error');
+      }
+
+      updateStatus('ledger', 'disconnected', '连接失败');
+      setLedgerButtons(false, false);
+      
+      // Cleanup on error
+      if (ledgerProvider) {
+        try {
+          ledgerProvider.disconnect().catch(() => {});
+        } catch (e) {
+          // Ignore
+        }
+        ledgerProvider = null;
+      }
+
+      // Reset retry state
+      ledgerRetryPending = false;
+      ledgerRetryCount = 0;
+    }
+
+    function setLedgerButtons(deviceConnected, accountConnected) {
+      document.getElementById('ledger-connect').disabled = deviceConnected;
+      document.getElementById('ledger-get-address').disabled = !deviceConnected;
+      document.getElementById('ledger-sign').disabled = !accountConnected;
+      document.getElementById('ledger-disconnect').disabled = !deviceConnected;
+    }
+
+    async function getLedgerAddressInternal() {
+      const chain = document.getElementById('ledger-chain-select').value;
+      const derivationPath = document.getElementById('ledger-derivation-path').value;
+      const addressIndex = parseInt(document.getElementById('ledger-address-index').value) || 0;
+      const change = parseInt(document.getElementById('ledger-change').value) || 0;
+
+      log(`获取 ${chain} 地址: ${derivationPath}, index=${addressIndex}, change=${change}`, 'info');
+      log(`请在 Ledger 设备上确认...`, 'info');
+
+      const account = await ledgerProvider.connect({
+        chain,
+        derivationPath,
+        addressIndex,
+        change,
+        timeout: 60000,
+      });
+
+      log(`Ledger 已连接: ${account.address}`, 'success');
+      log(`公钥: ${account.publicKey}`, 'info');
+      if (account.xpub) {
+        log(`xpub: ${account.xpub}`, 'info');
+      }
+      if (account.masterFingerprint) {
+        log(`Master Fingerprint: ${account.masterFingerprint}`, 'info');
+      }
+
+      // Update UI - show full values since we have enough space now
+      document.getElementById('ledger-address').textContent = account.address;
+      document.getElementById('ledger-pubkey').textContent = account.publicKey || '-';
+      document.getElementById('ledger-xpub').textContent = account.xpub || '-';
+
+      document.getElementById('ledger-chain').textContent = account.chain;
+      document.getElementById('ledger-path').textContent = account.derivationPath || derivationPath;
+
+      // Show fingerprint for BTC
+      const fingerprintLabel = document.getElementById('ledger-fingerprint-label');
+      const fingerprintValue = document.getElementById('ledger-fingerprint');
+      if (account.masterFingerprint) {
+        fingerprintLabel.style.display = 'block';
+        fingerprintValue.style.display = 'block';
+        fingerprintValue.textContent = account.masterFingerprint;
+      } else {
+        fingerprintLabel.style.display = 'none';
+        fingerprintValue.style.display = 'none';
+      }
+
+      updateStatus('ledger', 'connected', '已连接');
+      showInfo('ledger', true);
+      setLedgerButtons(true, true);
+      hideSignature('ledger');
+    }
+
+    window.getLedgerAddress = async function() {
+      if (!ledgerProvider) {
+        log('Ledger 未连接，请先点击"连接设备"', 'error');
+        return;
+      }
+
+      // Prevent double-click
+      if (ledgerOperationInProgress) {
+        log('操作进行中，请稍候...', 'warning');
+        return;
+      }
+      ledgerOperationInProgress = true;
+
+      try {
+        updateStatus('ledger', 'connecting', '获取中...');
+        await getLedgerAddressInternal();
+      } catch (error) {
+        log(`获取地址失败: ${error.message}`, 'error');
+        
+        // Check if device was disconnected
+        if (error.message?.includes('disconnected') || error.message?.includes('already open')) {
+          log('设备连接已断开，请重新连接', 'warning');
+          updateStatus('ledger', 'disconnected', '未连接');
+          setLedgerButtons(false, false);
+          try {
+            await ledgerProvider.disconnect();
+          } catch (e) {
+            // Ignore
+          }
+          ledgerProvider = null;
+        } else {
+          updateStatus('ledger', 'connected', '已连接');
+        }
+      } finally {
+        ledgerOperationInProgress = false;
+      }
+    };
+
+    window.signWithLedger = async function() {
+      if (!ledgerProvider || !ledgerProvider.account) {
+        log('Ledger 未连接', 'error');
+        return;
+      }
+
+      const message = document.getElementById('ledger-message').value;
+      if (!message) {
+        log('请输入要签名的消息', 'warning');
+        return;
+      }
+
+      try {
+        log(`正在签名消息: "${message}" (请在设备上确认)`, 'info');
+        const result = await ledgerProvider.signMessage(message, ledgerProvider.account);
+        log(`签名成功!`, 'success');
+        showSignature('ledger', result.signature);
+      } catch (error) {
+        log(`签名失败: ${error.message}`, 'error');
+      }
+    };
+
+    window.disconnectLedger = async function() {
+      if (ledgerProvider) {
+        await ledgerProvider.disconnect();
+        ledgerProvider = null;
+        log('Ledger 已断开', 'info');
+        updateStatus('ledger', 'disconnected', '未连接');
+        showInfo('ledger', false);
+        setLedgerButtons(false, false);
+        hideSignature('ledger');
+      }
+    };
+
+    // ─── WalletConnect ─────────────────────────────────────────────────────
+
+    window.connectWalletConnect = async function() {
+      try {
+        const projectId = document.getElementById('wc-project-id').value;
+        if (!projectId) {
+          log('请输入 WalletConnect Project ID', 'warning');
+          return;
+        }
+
+        log('正在初始化 WalletConnect...', 'info');
+        updateStatus('wc', 'connecting', '连接中...');
+
+        walletConnectProvider = new SDK.WalletConnectProvider({
+          projectId,
+          metadata: {
+            name: 'MultiVault Playground',
+            description: 'Wallet SDK Test',
+            url: window.location.origin,
+            icons: ['https://walletconnect.org/walletconnect-logo.png'],
+          },
+          chains: [1],
+          optionalChains: [137, 56, 42161],
+          showQrModal: true,
+        });
+
+        await walletConnectProvider.init();
+        log('WalletConnect provider 初始化成功', 'success');
+
+        // Setup event listeners
+        walletConnectProvider.on('disconnect', ({ reason }) => {
+          log(`WalletConnect 断开: ${reason}`, 'warning');
+          updateStatus('wc', 'disconnected', '未连接');
+          showInfo('wc', false);
+          setButtons('wc', false);
+          hideSignature('wc');
+        });
+
+        log('请扫描 QR 码连接...', 'info');
+        const account = await walletConnectProvider.connect({
+          chain: 'ETHEREUM',
+          timeout: 120000,
+        });
+
+        log(`WalletConnect 已连接: ${account.address}`, 'success');
+
+        document.getElementById('wc-address').textContent = account.address;
+        document.getElementById('wc-chain').textContent = account.chain;
+
+        // Try to get session info
+        const session = walletConnectProvider.getSession?.();
+        if (session) {
+          document.getElementById('wc-wallet').textContent = session.peerName || 'Unknown';
+        }
+
+        updateStatus('wc', 'connected', '已连接');
+        showInfo('wc', true);
+        setButtons('wc', true);
+        hideSignature('wc');
+
+      } catch (error) {
+        log(`WalletConnect 错误: ${error.message}`, 'error');
+        updateStatus('wc', 'disconnected', '连接失败');
+        setButtons('wc', false);
+      }
+    };
+
+    window.signWithWalletConnect = async function() {
+      if (!walletConnectProvider || !walletConnectProvider.account) {
+        log('WalletConnect 未连接', 'error');
+        return;
+      }
+
+      const message = document.getElementById('wc-message').value;
+      if (!message) {
+        log('请输入要签名的消息', 'warning');
+        return;
+      }
+
+      try {
+        log(`正在签名消息: "${message}" (请在钱包中确认)`, 'info');
+        const result = await walletConnectProvider.signMessage(message, walletConnectProvider.account);
+        log(`签名成功!`, 'success');
+        showSignature('wc', result.signature);
+      } catch (error) {
+        log(`签名失败: ${error.message}`, 'error');
+      }
+    };
+
+    window.disconnectWalletConnect = async function() {
+      if (walletConnectProvider) {
+        await walletConnectProvider.disconnect();
+        walletConnectProvider = null;
+        log('WalletConnect 已断开', 'info');
+        updateStatus('wc', 'disconnected', '未连接');
+        showInfo('wc', false);
+        setButtons('wc', false);
+        hideSignature('wc');
+      }
+    };
+
+    // ─── Init ──────────────────────────────────────────────────────────────
+
+    log('SDK 加载成功!', 'success');
+    log(`版本: @multivault/wallet-connector`, 'info');
+    log(`可用 Providers: MetaMask, Ledger, WalletConnect`, 'info');
+
+    // Check WebHID support
+    if (!navigator.hid) {
+      log('⚠️ 当前浏览器不支持 WebHID (Ledger)', 'warning');
+    }
+
+    // Check if MetaMask is installed
+    if (!window.ethereum) {
+      log('⚠️ 未检测到 MetaMask 扩展', 'warning');
+    }
+  </script>
+</body>
+</html>

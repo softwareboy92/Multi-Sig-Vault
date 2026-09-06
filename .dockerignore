@@ -1,0 +1,29 @@
+.git
+.gitignore
+**/.DS_Store
+
+# Local agent artifacts
+.agent
+
+# Node / pnpm
+**/node_modules
+**/.pnpm-store
+**/.turbo
+**/.vite
+
+# Python
+**/.venv
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+
+# Build outputs
+**/dist
+**/build
+
+# Logs / local data
+logs
+apps/backend/data
+
+# Archives and backups
+archive

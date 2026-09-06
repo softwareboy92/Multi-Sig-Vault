@@ -1,0 +1,2995 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MultiVault SDK + Backend Debugger</title>
+  <script type="module">
+    import { Buffer } from 'buffer';
+    window.Buffer = Buffer;
+  </script>
+  <style>
+    :root {
+      --primary: #6366f1;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --bg: #0f172a;
+      --card: #1e293b;
+      --border: #334155;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    .app {
+      display: grid;
+      grid-template-columns: 280px 1fr 350px;
+      min-height: 100vh;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      background: var(--card);
+      border-right: 1px solid var(--border);
+      padding: 20px;
+      overflow-y: auto;
+    }
+
+    .sidebar h1 {
+      font-size: 1.25rem;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .sidebar .subtitle {
+      color: var(--muted);
+      font-size: 0.8rem;
+      margin-bottom: 24px;
+    }
+
+    .config-section {
+      margin-bottom: 24px;
+    }
+
+    .config-section h3 {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 12px;
+      letter-spacing: 0.5px;
+    }
+
+    .input-group {
+      margin-bottom: 12px;
+    }
+
+    .input-group label {
+      display: block;
+      font-size: 0.85rem;
+      margin-bottom: 4px;
+      color: var(--muted);
+    }
+
+    .input-group input, .input-group select {
+      width: 100%;
+      padding: 8px 12px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 0.9rem;
+    }
+
+    .input-group input:focus, .input-group select:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 500;
+    }
+
+    .status-badge.connected {
+      background: rgba(34, 197, 94, 0.2);
+      color: var(--success);
+    }
+
+    .status-badge.disconnected {
+      background: rgba(239, 68, 68, 0.2);
+      color: var(--danger);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    /* Main content */
+    .main {
+      padding: 24px;
+      overflow-y: auto;
+    }
+
+    .section {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      margin-bottom: 20px;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .section-header h2 {
+      font-size: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .section-body {
+      padding: 20px;
+    }
+
+    .btn {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-primary { background: var(--primary); color: white; }
+    .btn-primary:hover:not(:disabled) { filter: brightness(1.1); }
+
+    .btn-success { background: var(--success); color: white; }
+    .btn-danger { background: var(--danger); color: white; }
+    .btn-secondary { background: var(--border); color: var(--text); }
+
+    .btn-sm { padding: 6px 12px; font-size: 0.8rem; }
+
+    .btn-group {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .wallet-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+
+    .wallet-card {
+      background: var(--bg);
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+    }
+
+    .wallet-card:hover {
+      border-color: var(--primary);
+    }
+
+    .wallet-card.connected {
+      border-color: var(--success);
+      background: rgba(34, 197, 94, 0.1);
+    }
+
+    .wallet-card .icon {
+      font-size: 2rem;
+      margin-bottom: 8px;
+    }
+
+    .wallet-card .name {
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .wallet-card .address {
+      font-size: 0.75rem;
+      color: var(--muted);
+      font-family: monospace;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+    }
+
+    .form-grid.cols-3 {
+      grid-template-columns: repeat(3, 1fr);
+    }
+
+    .form-actions {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+    }
+
+    /* Logs panel */
+    .logs-panel {
+      background: var(--card);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .logs-header {
+      padding: 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .logs-header h3 {
+      font-size: 0.9rem;
+    }
+
+    .logs-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+      font-family: 'Monaco', 'Menlo', monospace;
+      font-size: 0.75rem;
+      line-height: 1.6;
+    }
+
+    .log-entry {
+      padding: 6px 8px;
+      margin-bottom: 4px;
+      border-radius: 4px;
+      background: var(--bg);
+    }
+
+    .log-entry.info { border-left: 3px solid var(--primary); }
+    .log-entry.success { border-left: 3px solid var(--success); }
+    .log-entry.warning { border-left: 3px solid var(--warning); }
+    .log-entry.error { border-left: 3px solid var(--danger); }
+    .log-entry.request { border-left: 3px solid #8b5cf6; }
+    .log-entry.response { border-left: 3px solid #06b6d4; }
+
+    .log-time {
+      color: var(--muted);
+      margin-right: 8px;
+    }
+
+    .log-type {
+      font-weight: 600;
+      margin-right: 8px;
+    }
+
+    .log-body {
+      margin-top: 4px;
+      padding: 8px;
+      background: rgba(0,0,0,0.3);
+      border-radius: 4px;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    /* Response display */
+    .response-box {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      margin-top: 12px;
+      font-family: monospace;
+      font-size: 0.8rem;
+      max-height: 200px;
+      overflow: auto;
+      white-space: pre-wrap;
+    }
+
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+
+    .data-table th, .data-table td {
+      text-align: left;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .data-table th {
+      color: var(--muted);
+      font-weight: 500;
+      font-size: 0.8rem;
+    }
+
+    .data-table tr:hover td {
+      background: rgba(255,255,255,0.03);
+    }
+
+    .mono {
+      font-family: monospace;
+      font-size: 0.8rem;
+    }
+
+    .text-success { color: var(--success); }
+    .text-danger { color: var(--danger); }
+    .text-warning { color: var(--warning); }
+    .text-muted { color: var(--muted); }
+
+    .empty-state {
+      text-align: center;
+      padding: 40px;
+      color: var(--muted);
+    }
+
+    .asset-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 12px;
+    }
+
+    .asset-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .asset-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .asset-symbol {
+      font-weight: 600;
+      font-size: 1.1rem;
+      color: var(--text);
+    }
+
+    .asset-balance {
+      font-size: 1.25rem;
+      font-weight: 500;
+      color: var(--primary);
+      margin-bottom: 4px;
+    }
+
+    .asset-name {
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    .asset-contract {
+      font-size: 0.7rem;
+      color: var(--muted);
+      font-family: var(--font-mono);
+      margin-top: 8px;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 16px;
+    }
+
+    .tab {
+      padding: 8px 16px;
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      border-radius: 6px;
+      font-size: 0.85rem;
+    }
+
+    .tab:hover { background: var(--bg); }
+    .tab.active { background: var(--primary); color: white; }
+
+    /* Main tabs (top-level navigation) */
+    .main-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+      border-bottom: 2px solid var(--border);
+      padding-bottom: 0;
+    }
+
+    .main-tab {
+      padding: 12px 20px;
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 500;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .main-tab:hover { color: var(--text); }
+
+    .main-tab.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+    }
+
+    .main-tab .tab-status {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--danger);
+    }
+
+    .main-tab .tab-status.connected { background: var(--success); }
+
+    .main-panel {
+      display: none;
+    }
+
+    .main-panel.active {
+      display: block;
+    }
+
+    /* Info grid for wallet details */
+    .info-grid {
+      display: grid;
+      grid-template-columns: 140px 1fr;
+      gap: 8px 16px;
+      padding: 16px;
+      background: var(--bg);
+      border-radius: 8px;
+      margin-bottom: 16px;
+    }
+
+    .info-grid .label {
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    .info-grid .value {
+      font-family: 'Monaco', 'Menlo', monospace;
+      font-size: 0.8rem;
+      word-break: break-all;
+      color: var(--text);
+    }
+
+    .info-grid .value.mono-small {
+      font-size: 0.75rem;
+    }
+
+    /* Form row for inline inputs */
+    .form-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    /* Wallet type tabs */
+    .wallet-type-tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 8px;
+    }
+
+    .wallet-type-tab {
+      padding: 8px 16px;
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      border-radius: 6px 6px 0 0;
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .wallet-type-tab:hover { background: var(--bg); }
+    .wallet-type-tab.active { 
+      background: var(--primary); 
+      color: white; 
+    }
+
+    .wallet-type-panel {
+      display: none;
+    }
+
+    .wallet-type-panel.active {
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- Sidebar: Config -->
+    <aside class="sidebar">
+      <h1>🔧 Debugger</h1>
+      <p class="subtitle">SDK + Backend 联调工具</p>
+
+      <div class="config-section">
+        <h3>后端配置</h3>
+        <div class="input-group">
+          <label>API Base URL</label>
+          <input type="text" id="apiBaseUrl" value="/api/v1" />
+        </div>
+        <div style="margin: 12px 0;">
+          <span id="backendStatus" class="status-badge disconnected">
+            <span class="status-dot"></span>
+            <span>未连接</span>
+          </span>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="checkBackendHealth()">检查连接</button>
+      </div>
+
+      <div class="config-section">
+        <h3>链配置</h3>
+        <div class="input-group">
+          <label>Chain Type</label>
+          <select id="chainType">
+            <option value="evm">EVM (Ethereum)</option>
+            <option value="btc" selected>Bitcoin</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <label>Network</label>
+          <select id="network">
+            <option value="mainnet">Mainnet</option>
+            <option value="testnet" selected>Testnet</option>
+            <option value="sepolia">Sepolia</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="config-section">
+        <h3>快速操作</h3>
+        <div class="btn-group" style="flex-direction: column;">
+          <button class="btn btn-secondary btn-sm" onclick="clearLogs()">清空日志</button>
+          <button class="btn btn-secondary btn-sm" onclick="exportLogs()">导出日志</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main: Testing panels -->
+    <main class="main">
+      <!-- Top-level Tabs -->
+      <div class="main-tabs">
+        <button class="main-tab active" onclick="switchMainTab('wallet')">
+          🔗 钱包连接
+          <span id="wallet-tab-status" class="tab-status"></span>
+        </button>
+        <button class="main-tab" onclick="switchMainTab('signer')">
+          👤 Signer
+        </button>
+        <button class="main-tab" onclick="switchMainTab('wallet-mgmt')">
+          💼 Wallet
+        </button>
+        <button class="main-tab" onclick="switchMainTab('transaction')">
+          📝 交易
+        </button>
+        <button class="main-tab" onclick="switchMainTab('signing')">
+          ✍️ 签名测试
+        </button>
+      </div>
+
+      <!-- Panel 1: Wallet Connection -->
+      <div id="wallet-panel" class="main-panel active">
+        <div class="section">
+          <div class="section-header">
+            <h2>🔗 钱包连接</h2>
+            <span id="walletStatus" class="status-badge disconnected">
+              <span class="status-dot"></span>
+              <span>未连接</span>
+            </span>
+          </div>
+          <div class="section-body">
+            <!-- Wallet Type Tabs -->
+            <div class="wallet-type-tabs">
+              <button class="wallet-type-tab active" onclick="switchWalletType('ledger')">
+                🔒 Ledger
+              </button>
+              <button class="wallet-type-tab" onclick="switchWalletType('metamask')">
+                🦊 MetaMask
+              </button>
+              <button class="wallet-type-tab" onclick="switchWalletType('walletconnect')">
+                🔵 WalletConnect
+              </button>
+            </div>
+
+            <!-- Ledger Panel -->
+            <div id="wallet-type-ledger" class="wallet-type-panel active">
+              <!-- Ledger Info Display -->
+              <div id="ledger-info" class="info-grid" style="display: none;">
+                <span class="label">地址</span>
+                <span class="value" id="ledger-address">-</span>
+                <span class="label">公钥 (压缩)</span>
+                <span class="value mono-small" id="ledger-pubkey">-</span>
+                <span class="label">xpub</span>
+                <span class="value mono-small" id="ledger-xpub">-</span>
+                <span class="label">链</span>
+                <span class="value" id="ledger-chain">-</span>
+                <span class="label">派生路径</span>
+                <span class="value" id="ledger-path">-</span>
+                <span class="label" id="ledger-fingerprint-label" style="display: none;">Master Fingerprint</span>
+                <span class="value" id="ledger-fingerprint" style="display: none;">-</span>
+              </div>
+
+              <!-- Ledger Connection Settings -->
+              <div class="form-row">
+                <div class="input-group">
+                  <label>选择链</label>
+                  <select id="ledger-chain-select">
+                    <option value="BITCOIN" selected>Bitcoin</option>
+                    <option value="ETHEREUM">Ethereum</option>
+                  </select>
+                </div>
+                <div class="input-group">
+                  <label>派生路径 (Account Level)</label>
+                  <input type="text" id="ledger-derivation-path" value="m/48'/1'/0'/2'" placeholder="例如: m/48'/1'/0'/2' (testnet)">
+                </div>
+              </div>
+
+              <!-- BTC Account Quick Switch -->
+              <div id="btc-account-switcher" class="form-row" style="background: rgba(255,193,7,0.1); padding: 8px; border-radius: 6px; margin-bottom: 12px;">
+                <div class="input-group" style="flex: 1;">
+                  <label style="font-size: 11px; color: var(--warning);">🔑 BTC 账户快速切换 (创建多签需要不同账户)</label>
+                  <div class="btn-group" style="margin-top: 4px;">
+                    <button class="btn btn-sm" onclick="switchBtcAccount(0)" style="padding: 4px 12px;">账户 0</button>
+                    <button class="btn btn-sm" onclick="switchBtcAccount(1)" style="padding: 4px 12px;">账户 1</button>
+                    <button class="btn btn-sm" onclick="switchBtcAccount(2)" style="padding: 4px 12px;">账户 2</button>
+                    <input type="number" id="btc-custom-account" min="0" max="99" value="0" style="width: 50px; padding: 4px;" />
+                    <button class="btn btn-sm btn-secondary" onclick="switchBtcAccount()" style="padding: 4px 8px;">切换</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="input-group">
+                  <label>地址索引 (addressIndex)</label>
+                  <input type="number" id="ledger-address-index" value="0" min="0" max="999999">
+                </div>
+                <div class="input-group">
+                  <label>Change (BTC only)</label>
+                  <select id="ledger-change">
+                    <option value="0">0 (外部/接收)</option>
+                    <option value="1">1 (内部/找零)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="btn-group">
+                <button id="ledger-connect-btn" class="btn btn-primary" onclick="connectLedger()">
+                  连接设备
+                </button>
+                <button id="ledger-get-address-btn" class="btn btn-secondary" onclick="getLedgerAddress()" disabled>
+                  获取地址
+                </button>
+                <button id="ledger-disconnect-btn" class="btn btn-danger" onclick="disconnectLedger()" disabled>
+                  断开
+                </button>
+              </div>
+            </div>
+
+            <!-- MetaMask Panel -->
+            <div id="wallet-type-metamask" class="wallet-type-panel">
+              <div id="metamask-info" class="info-grid" style="display: none;">
+                <span class="label">地址</span>
+                <span class="value" id="metamask-address">-</span>
+                <span class="label">链</span>
+                <span class="value" id="metamask-chain">-</span>
+              </div>
+
+              <div class="btn-group">
+                <button id="metamask-connect-btn" class="btn btn-primary" onclick="connectMetaMask()">
+                  连接
+                </button>
+                <button id="metamask-disconnect-btn" class="btn btn-danger" onclick="disconnectMetaMask()" disabled>
+                  断开
+                </button>
+              </div>
+            </div>
+
+            <!-- WalletConnect Panel -->
+            <div id="wallet-type-walletconnect" class="wallet-type-panel">
+              <div id="wc-info" class="info-grid" style="display: none;">
+                <span class="label">地址</span>
+                <span class="value" id="wc-address">-</span>
+                <span class="label">链</span>
+                <span class="value" id="wc-chain">-</span>
+              </div>
+
+              <div class="input-group" style="margin-bottom: 16px;">
+                <label>WalletConnect Project ID (可选)</label>
+                <input type="text" id="wcProjectIdInput" placeholder="留空使用默认" />
+              </div>
+
+              <div class="btn-group">
+                <button id="wc-connect-btn" class="btn btn-primary" onclick="connectWalletConnect()">
+                  连接
+                </button>
+                <button id="wc-disconnect-btn" class="btn btn-danger" onclick="disconnectWalletConnect()" disabled>
+                  断开
+                </button>
+              </div>
+              <p style="font-size: 12px; color: var(--text-muted); margin-top: 8px;">
+                💡 每次连接都会创建新会话，旧会话将被自动清除
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Panel 2: Signer Management -->
+      <div id="signer-panel" class="main-panel">
+        <div class="section">
+          <div class="section-header">
+            <h2>👤 Signer 管理</h2>
+          </div>
+          <div class="section-body">
+            <div class="tabs">
+              <button class="tab active" onclick="switchTab(this, 'signer-create')">创建</button>
+              <button class="tab" onclick="switchTab(this, 'signer-list')">列表</button>
+            </div>
+
+            <div id="signer-create" class="tab-content">
+              <div class="form-grid cols-3">
+                <div class="input-group">
+                  <label>Name</label>
+                  <input type="text" id="signerName" placeholder="My Signer" />
+                </div>
+                <div class="input-group">
+                  <label>Device Type</label>
+                  <select id="signerDeviceType">
+                    <option value="METAMASK">MetaMask</option>
+                    <option value="LEDGER">Ledger</option>
+                    <option value="HOT">Hot Wallet</option>
+                    <option value="WATCH_ONLY">Watch Only</option>
+                  </select>
+                </div>
+                <div class="input-group">
+                  <label>Chain Type</label>
+                  <select id="signerChain">
+                    <option value="EVM">EVM</option>
+                    <option value="BTC">BTC</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-grid">
+                <div class="input-group">
+                  <label>Address (EVM)</label>
+                  <input type="text" id="signerAddress" placeholder="0x..." />
+                </div>
+                <div class="input-group">
+                  <label>Public Key (BTC)</label>
+                  <input type="text" id="signerPubkey" placeholder="02/03..." />
+                </div>
+              </div>
+              
+              <!-- BTC Extension Fields -->
+              <div id="btc-signer-fields" style="display:none;">
+                <div style="background: rgba(255,193,7,0.15); padding: 8px 12px; border-radius: 6px; margin-bottom: 12px; font-size: 11px; color: var(--warning);">
+                  ⚠️ <strong>BTC 多签注意</strong>：每个 Signer 必须使用<strong>不同的 BTC 账户</strong>（账户 0、账户 1 等），
+                  而不是同一账户的不同地址。派生路径应为账户级别，如 <code>m/48'/1'/0'/2'</code> (testnet) 或 <code>m/48'/0'/0'/2'</code> (mainnet)。
+                </div>
+                <div class="form-grid cols-3">
+                  <div class="input-group">
+                    <label>Derivation Path (账户级别)</label>
+                    <input type="text" id="signerDerivationPath" placeholder="m/48'/1'/0'/2' (testnet)" />
+                  </div>
+                  <div class="input-group">
+                    <label>Master Fingerprint</label>
+                    <input type="text" id="signerMasterFingerprint" placeholder="e.g. 73c5da0a" />
+                  </div>
+                  <div class="input-group">
+                    <label>xpub</label>
+                    <input type="text" id="signerXpub" placeholder="xpub/tpub..." />
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-actions">
+                <button class="btn btn-primary" onclick="createSigner()">创建 Signer</button>
+                <button class="btn btn-secondary" onclick="fillSignerFromWallet()">从钱包填充</button>
+              </div>
+            </div>
+
+            <div id="signer-list" class="tab-content" style="display:none;">
+              <button class="btn btn-secondary btn-sm" onclick="listSigners()" style="margin-bottom:12px;">刷新列表</button>
+              <div id="signerListContainer">
+                <div class="empty-state">点击刷新加载 Signer 列表</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Panel 3: Wallet Management -->
+      <div id="wallet-mgmt-panel" class="main-panel">
+        <div class="section">
+          <div class="section-header">
+            <h2>💼 Wallet 管理</h2>
+          </div>
+          <div class="section-body">
+            <div class="tabs">
+              <button class="tab active" onclick="switchTab(this, 'wallet-create')">创建</button>
+              <button class="tab" onclick="switchTab(this, 'wallet-list')">列表</button>
+              <button class="tab" onclick="switchTab(this, 'wallet-deploy')">部署</button>
+              <button class="tab" onclick="switchTab(this, 'wallet-assets')">资产</button>
+            </div>
+
+            <div id="wallet-create" class="tab-content">
+              <div class="form-grid cols-3">
+                <div class="input-group">
+                  <label>Name</label>
+                  <input type="text" id="walletName" placeholder="My Wallet" />
+                </div>
+                <div class="input-group">
+                  <label>Threshold</label>
+                  <input type="number" id="walletThreshold" value="2" min="1" />
+                </div>
+                <div class="input-group">
+                  <label>Chain Type</label>
+                  <select id="walletChainType">
+                    <option value="EVM">EVM (Safe)</option>
+                    <option value="BTC">BTC (Multisig)</option>
+                  </select>
+                </div>
+              </div>
+              <div class="input-group">
+                <label>Signer IDs (逗号分隔)</label>
+                <input type="text" id="walletSignerIds" placeholder="signer-id-1, signer-id-2" />
+              </div>
+              <div class="form-actions">
+                <button class="btn btn-primary" onclick="createWallet()">创建 Wallet</button>
+              </div>
+            </div>
+
+            <div id="wallet-list" class="tab-content" style="display:none;">
+              <button class="btn btn-secondary btn-sm" onclick="listWallets()" style="margin-bottom:12px;">刷新列表</button>
+              <div id="walletListContainer">
+                <div class="empty-state">点击刷新加载 Wallet 列表</div>
+              </div>
+            </div>
+
+            <div id="wallet-deploy" class="tab-content" style="display:none;">
+              <p class="text-muted" style="margin-bottom:16px;">对于 PENDING_DEPLOY 状态的 EVM 钱包，可以在这里部署 Safe 合约</p>
+              <div class="form-grid">
+                <div class="input-group">
+                  <label>Wallet ID</label>
+                  <input type="text" id="deployWalletId" placeholder="选择一个 PENDING_DEPLOY 的钱包" />
+                </div>
+                <div class="input-group">
+                  <label>预测地址</label>
+                  <input type="text" id="deployPredictedAddress" readonly placeholder="获取部署信息后显示" />
+                </div>
+              </div>
+              <div id="deploymentInfo" style="display:none; margin-top:12px;">
+                <div class="response-box" id="deploymentInfoJson"></div>
+              </div>
+              <div class="form-actions">
+                <button class="btn btn-secondary" onclick="getDeploymentInfo()">获取部署信息</button>
+                <button class="btn btn-primary" onclick="deploySafe()" id="deployBtn" disabled>部署 Safe 合约</button>
+              </div>
+              <div id="deployResult" class="response-box" style="display:none; margin-top:12px;"></div>
+            </div>
+
+            <div id="wallet-assets" class="tab-content" style="display:none;">
+              <p class="text-muted" style="margin-bottom:16px;">查询和同步钱包资产余额（需要钱包已激活）</p>
+              <div class="form-grid">
+                <div class="input-group">
+                  <label>Wallet ID</label>
+                  <input type="text" id="assetWalletId" placeholder="选择一个 ACTIVE 状态的钱包" />
+                </div>
+              </div>
+              <div class="form-actions">
+                <button class="btn btn-secondary" onclick="getWalletAssets()">查询资产</button>
+                <button class="btn btn-primary" onclick="syncWalletAssets()">从链上同步</button>
+              </div>
+              
+              <!-- Import ERC20 Token -->
+              <div style="margin-top:20px; padding-top:16px; border-top:1px solid var(--border);">
+                <h4 style="margin-bottom:12px;">导入 ERC20 代币</h4>
+                <div class="form-grid">
+                  <div class="input-group">
+                    <label>合约地址 *</label>
+                    <input type="text" id="tokenContractAddress" placeholder="0x..." />
+                  </div>
+                  <div class="input-group">
+                    <label>Symbol (可选)</label>
+                    <input type="text" id="tokenSymbol" placeholder="自动获取" />
+                  </div>
+                </div>
+                <div class="form-actions">
+                  <button class="btn btn-secondary" onclick="importToken()">导入代币</button>
+                </div>
+              </div>
+
+              <div id="assetsList" style="margin-top:16px;">
+                <div class="empty-state">选择钱包后点击查询或同步</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Panel 4: Transactions -->
+      <div id="transaction-panel" class="main-panel">
+        <div class="section">
+          <div class="section-header">
+            <h2>📝 交易测试</h2>
+          </div>
+          <div class="section-body">
+            <div class="tabs">
+              <button class="tab active" onclick="switchTab(this, 'tx-create')">创建交易</button>
+              <button class="tab" onclick="switchTab(this, 'tx-sign')">签名</button>
+              <button class="tab" onclick="switchTab(this, 'tx-list')">列表</button>
+            </div>
+
+            <div id="tx-create" class="tab-content">
+              <div class="form-grid">
+                <div class="input-group">
+                  <label>Wallet ID</label>
+                  <input type="text" id="txWalletId" placeholder="选择或输入 Wallet ID" />
+                </div>
+                <div class="input-group">
+                  <label>To Address</label>
+                  <input type="text" id="txToAddress" placeholder="0x..." />
+                </div>
+              </div>
+              <div class="form-grid cols-3">
+                <div class="input-group">
+                  <label>Amount</label>
+                  <input type="text" id="txAmount" value="0.001" />
+                </div>
+                <div class="input-group">
+                  <label>Token (留空=原生币)</label>
+                  <input type="text" id="txToken" placeholder="0x..." />
+                </div>
+                <div class="input-group">
+                  <label>Description</label>
+                  <input type="text" id="txDesc" placeholder="Test transfer" />
+                </div>
+              </div>
+              <div class="form-actions">
+                <button class="btn btn-primary" onclick="createTransaction()">创建交易</button>
+              </div>
+            </div>
+
+            <div id="tx-sign" class="tab-content" style="display:none;">
+              <div class="form-grid">
+                <div class="input-group">
+                  <label>Transaction ID</label>
+                  <input type="text" id="signTxId" placeholder="transaction-id" />
+                </div>
+              </div>
+              <div class="form-actions">
+                <button class="btn btn-secondary" onclick="confirmTransaction()">确认交易</button>
+                <button class="btn btn-warning" onclick="registerWalletPolicy()" style="background: var(--warning);">注册 BTC 多签 Policy</button>
+                <button class="btn btn-primary" onclick="signTransaction()">签名并提交</button>
+                <button class="btn btn-success" onclick="executeTransaction()" style="background: var(--success);">执行上链</button>
+              </div>
+              <div id="signResult" class="response-box" style="display:none;"></div>
+            </div>
+
+            <div id="tx-list" class="tab-content" style="display:none;">
+              <div class="form-grid">
+                <div class="input-group">
+                  <label>Wallet ID (可选)</label>
+                  <input type="text" id="txListWalletId" placeholder="过滤特定钱包" />
+                </div>
+              </div>
+              <button class="btn btn-secondary btn-sm" onclick="listTransactions()" style="margin-bottom:12px;">刷新列表</button>
+              <div id="txListContainer">
+                <div class="empty-state">点击刷新加载交易列表</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Panel 5: Message Signing -->
+      <div id="signing-panel" class="main-panel">
+        <div class="section">
+          <div class="section-header">
+            <h2>✍️ 消息签名测试</h2>
+          </div>
+          <div class="section-body">
+            <div class="input-group">
+              <label>Message</label>
+              <input type="text" id="signMessage" value="Hello, MultiVault!" />
+            </div>
+            <div class="form-actions">
+              <button class="btn btn-primary" onclick="signPersonalMessage()">Personal Sign</button>
+              <button class="btn btn-secondary" onclick="signTypedData()">EIP-712 Sign</button>
+            </div>
+            <div id="messageSignResult" class="response-box" style="display:none;"></div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Logs Panel -->
+    <aside class="logs-panel">
+      <div class="logs-header">
+        <h3>📋 请求日志</h3>
+        <span id="logCount" class="text-muted">0 条</span>
+      </div>
+      <div class="logs-content" id="logsContainer"></div>
+    </aside>
+  </div>
+
+  <script type="module">
+    import {
+      MetaMaskProvider,
+      LedgerProvider,
+      WalletConnectProvider,
+      WalletError,
+    } from '@multivault/wallet-connector';
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // State
+    // ═══════════════════════════════════════════════════════════════════════
+    let currentProvider = null;
+    let connectedWalletType = null;
+    let accounts = [];
+    let logs = [];
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Logging
+    // ═══════════════════════════════════════════════════════════════════════
+    function log(type, message, data = null) {
+      const entry = {
+        time: new Date().toLocaleTimeString(),
+        type,
+        message,
+        data
+      };
+      logs.push(entry);
+      renderLogs();
+    }
+
+    function renderLogs() {
+      const container = document.getElementById('logsContainer');
+      const count = document.getElementById('logCount');
+      count.textContent = `${logs.length} 条`;
+
+      container.innerHTML = logs.slice().reverse().map(entry => {
+        let dataHtml = '';
+        if (entry.data) {
+          try {
+            dataHtml = `<div class="log-body">${typeof entry.data === 'string' ? entry.data : JSON.stringify(entry.data, null, 2)}</div>`;
+          } catch (e) {
+            dataHtml = `<div class="log-body">${String(entry.data)}</div>`;
+          }
+        }
+        return `
+          <div class="log-entry ${entry.type}">
+            <span class="log-time">${entry.time}</span>
+            <span class="log-type">[${entry.type.toUpperCase()}]</span>
+            <span>${entry.message}</span>
+            ${dataHtml}
+          </div>
+        `;
+      }).join('');
+
+      container.scrollTop = 0;
+    }
+
+    window.clearLogs = function() {
+      logs = [];
+      renderLogs();
+    };
+
+    window.exportLogs = function() {
+      const blob = new Blob([JSON.stringify(logs, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `multivault-debug-${Date.now()}.json`;
+      a.click();
+    };
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // API Client
+    // ═══════════════════════════════════════════════════════════════════════
+    function getApiUrl() {
+      return document.getElementById('apiBaseUrl').value.replace(/\/$/, '');
+    }
+
+    async function apiRequest(method, path, body = null) {
+      const url = `${getApiUrl()}${path}`;
+      log('request', `${method} ${path}`, body);
+
+      try {
+        const options = {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+        };
+        if (body) options.body = JSON.stringify(body);
+
+        const res = await fetch(url, options);
+        
+        let data;
+        try {
+          data = await res.json();
+        } catch (parseErr) {
+          const text = await res.text().catch(() => '(unable to read response)');
+          log('error', `Failed to parse JSON response: ${res.status}`, { text });
+          throw new Error(`Invalid JSON response: ${res.status} ${res.statusText}`);
+        }
+
+        if (!res.ok) {
+          // Extract error message from various possible response formats
+          let errorMessage = 'API Error';
+          if (data.error && data.error.message) {
+            // Backend ErrorResponse format: { error: { code, message, details } }
+            errorMessage = data.error.message;
+          } else if (data.detail) {
+            // FastAPI default format or string detail
+            errorMessage = typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail);
+          } else if (data.message) {
+            errorMessage = data.message;
+          }
+          log('error', `${res.status} ${res.statusText}: ${errorMessage}`, data);
+          throw new Error(errorMessage);
+        }
+
+        log('response', `${res.status} OK`, data);
+        return data;
+      } catch (err) {
+        // Only log if not already logged by the error handling above
+        if (err.message && !err.message.startsWith('Invalid JSON') && 
+            err.message !== 'API Error' && !err._logged) {
+          // Network errors or other fetch failures
+          if (err.name === 'TypeError' || err.message.includes('fetch')) {
+            log('error', 'Network error: Unable to reach backend', { message: err.message });
+          }
+        }
+        throw err;
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Backend Health
+    // ═══════════════════════════════════════════════════════════════════════
+    window.checkBackendHealth = async function() {
+      const status = document.getElementById('backendStatus');
+      try {
+        const data = await apiRequest('GET', '/health');
+        status.className = 'status-badge connected';
+        status.innerHTML = '<span class="status-dot"></span><span>已连接</span>';
+        log('success', 'Backend health check passed', data);
+      } catch (err) {
+        status.className = 'status-badge disconnected';
+        status.innerHTML = '<span class="status-dot"></span><span>连接失败</span>';
+      }
+    };
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Wallet Connection
+    // ═══════════════════════════════════════════════════════════════════════
+    let ledgerProvider = null;
+
+    function updateWalletStatus() {
+      const status = document.getElementById('walletStatus');
+
+      if (connectedWalletType && accounts.length > 0) {
+        status.className = 'status-badge connected';
+        status.innerHTML = `<span class="status-dot"></span><span>${connectedWalletType} - ${accounts[0].address.slice(0,8)}...</span>`;
+      } else {
+        status.className = 'status-badge disconnected';
+        status.innerHTML = '<span class="status-dot"></span><span>未连接</span>';
+      }
+
+      // Also update the tab status indicator
+      updateWalletTabStatus();
+    }
+
+    // Wallet type tab switching
+    window.switchWalletType = function(type) {
+      // Update tabs
+      document.querySelectorAll('.wallet-type-tab').forEach(tab => {
+        tab.classList.remove('active');
+      });
+      event.target.closest('.wallet-type-tab').classList.add('active');
+
+      // Update panels
+      document.querySelectorAll('.wallet-type-panel').forEach(panel => {
+        panel.classList.remove('active');
+      });
+      document.getElementById(`wallet-type-${type}`).classList.add('active');
+    };
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Helper: Get BTC coinType based on network
+    // ═══════════════════════════════════════════════════════════════════════
+    function getBtcCoinType() {
+      const network = document.getElementById('network').value;
+      // mainnet = 0, testnet = 1
+      return network === 'testnet' ? 1 : 0;
+    }
+
+    function updateBtcDerivationPath() {
+      const pathInput = document.getElementById('ledger-derivation-path');
+      const chainSelect = document.getElementById('ledger-chain-select');
+      if (chainSelect.value === 'BITCOIN') {
+        const coinType = getBtcCoinType();
+        // Extract current account index from path
+        const match = pathInput.value.match(/m\/48'\/\d+'\/(\d+)'\/2'/);
+        const accountIndex = match ? parseInt(match[1]) : 0;
+        pathInput.value = `m/48'/${coinType}'/${accountIndex}'/2'`;
+      }
+    }
+
+    // Update Ledger chain select to auto-update derivation path
+    document.getElementById('ledger-chain-select').addEventListener('change', function() {
+      const pathInput = document.getElementById('ledger-derivation-path');
+      if (this.value === 'BITCOIN') {
+        const coinType = getBtcCoinType();
+        pathInput.value = `m/48'/${coinType}'/0'/2'`;
+      } else {
+        pathInput.value = "m/44'/60'/0'/0";
+      }
+    });
+
+    // Update derivation path when network changes (for BTC)
+    document.getElementById('network').addEventListener('change', function() {
+      updateBtcDerivationPath();
+    });
+
+    // Toggle BTC extension fields based on signer chain type
+    document.getElementById('signerChain').addEventListener('change', function() {
+      const btcFields = document.getElementById('btc-signer-fields');
+      btcFields.style.display = this.value === 'BTC' ? 'block' : 'none';
+    });
+
+    // Update BTC account switcher visibility based on chain selection
+    document.getElementById('ledger-chain-select').addEventListener('change', function() {
+      const switcher = document.getElementById('btc-account-switcher');
+      switcher.style.display = this.value === 'BITCOIN' ? 'flex' : 'none';
+    });
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // BTC Account Switcher
+    // ═══════════════════════════════════════════════════════════════════════
+    window.switchBtcAccount = async function(accountIndex) {
+      // Get account index from parameter or input
+      if (accountIndex === undefined) {
+        accountIndex = parseInt(document.getElementById('btc-custom-account').value) || 0;
+      }
+      
+      // Update derivation path to new account (use correct coinType based on network)
+      const coinType = getBtcCoinType();
+      const newPath = `m/48'/${coinType}'/${accountIndex}'/2'`;
+      document.getElementById('ledger-derivation-path').value = newPath;
+      document.getElementById('btc-custom-account').value = accountIndex;
+      
+      log('info', `Switching to BTC Account ${accountIndex}: ${newPath}`);
+      
+      // If Ledger is connected, get new address
+      if (ledgerProvider && ledgerProvider.state === 'CONNECTED') {
+        try {
+          await getLedgerAddressInternal();
+        } catch (err) {
+          log('error', `Failed to get address for account ${accountIndex}: ${err.message}`);
+          // If connection lost, suggest reconnecting
+          if (err.message?.includes('null') || err.message?.includes('not connected') || err.message?.includes('disconnected')) {
+            log('warning', 'Connection lost. Please click "连接设备" to reconnect.');
+            showLedgerInfo(false);
+            setLedgerButtons(false, false);
+            try { await ledgerProvider.disconnect(); } catch (e) {}
+            ledgerProvider = null;
+            currentProvider = null;
+            connectedWalletType = null;
+            accounts = [];
+            updateWalletStatus();
+          }
+        }
+      } else if (ledgerProvider) {
+        log('warning', 'Ledger not in connected state. Please click "连接设备" to reconnect.');
+      } else {
+        log('info', 'Path updated. Connect Ledger to get the address.');
+      }
+    };
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Ledger Functions
+    // ═══════════════════════════════════════════════════════════════════════
+    function setLedgerButtons(deviceConnected, accountConnected) {
+      document.getElementById('ledger-connect-btn').disabled = deviceConnected;
+      document.getElementById('ledger-get-address-btn').disabled = !deviceConnected;
+      document.getElementById('ledger-disconnect-btn').disabled = !deviceConnected;
+    }
+
+    function showLedgerInfo(show) {
+      document.getElementById('ledger-info').style.display = show ? 'grid' : 'none';
+    }
+
+    function updateLedgerInfo(account) {
+      document.getElementById('ledger-address').textContent = account.address || '-';
+      document.getElementById('ledger-pubkey').textContent = account.publicKey || '-';
+      document.getElementById('ledger-xpub').textContent = account.xpub || '-';
+      document.getElementById('ledger-chain').textContent = account.chain || '-';
+      document.getElementById('ledger-path').textContent = account.derivationPath || '-';
+
+      // Show fingerprint for BTC
+      const fingerprintLabel = document.getElementById('ledger-fingerprint-label');
+      const fingerprintValue = document.getElementById('ledger-fingerprint');
+      if (account.masterFingerprint) {
+        fingerprintLabel.style.display = 'block';
+        fingerprintValue.style.display = 'block';
+        fingerprintValue.textContent = account.masterFingerprint;
+      } else {
+        fingerprintLabel.style.display = 'none';
+        fingerprintValue.style.display = 'none';
+      }
+    }
+
+    window.connectLedger = async function() {
+      try {
+        log('info', 'Connecting Ledger...');
+
+        // Cleanup existing provider if any
+        if (ledgerProvider) {
+          try {
+            await ledgerProvider.disconnect();
+          } catch (e) {}
+          ledgerProvider = null;
+        }
+
+        ledgerProvider = new LedgerProvider({
+          transportType: 'webhid',
+          autoReconnect: true,
+        });
+
+        await ledgerProvider.init();
+        log('info', 'Ledger provider initialized');
+
+        // Setup event listeners
+        ledgerProvider.on('disconnect', ({ reason }) => {
+          log('warning', `Ledger disconnected: ${reason}`);
+          showLedgerInfo(false);
+          setLedgerButtons(false, false);
+          updateWalletStatus();
+          ledgerProvider = null;
+          currentProvider = null;
+          connectedWalletType = null;
+          accounts = [];
+        });
+
+        ledgerProvider.on('appChange', ({ requiredApp, currentApp, action }) => {
+          if (action === 'quitting') {
+            log('info', `Quitting ${currentApp} App, preparing to open ${requiredApp}...`);
+          } else if (action === 'opening') {
+            log('info', `Requesting to open ${requiredApp} App...`);
+            log('warning', 'Please confirm on your Ledger device');
+          }
+        });
+
+        // Get address with current settings
+        await getLedgerAddressInternal();
+
+      } catch (err) {
+        log('error', 'Ledger connection failed', err.message);
+        showLedgerInfo(false);
+        setLedgerButtons(false, false);
+        if (ledgerProvider) {
+          try { await ledgerProvider.disconnect(); } catch (e) {}
+          ledgerProvider = null;
+        }
+      }
+    };
+
+    async function getLedgerAddressInternal() {
+      const chain = document.getElementById('ledger-chain-select').value;
+      const derivationPath = document.getElementById('ledger-derivation-path').value;
+      const addressIndex = parseInt(document.getElementById('ledger-address-index').value) || 0;
+      const change = parseInt(document.getElementById('ledger-change').value) || 0;
+      const networkSelect = document.getElementById('network').value;
+      
+      // Determine network for BTC (testnet or mainnet)
+      const network = (chain === 'BITCOIN' && (networkSelect === 'testnet')) ? 'testnet' : 'mainnet';
+      const appName = network === 'testnet' ? 'Bitcoin Test' : 'Bitcoin';
+
+      log('info', `Getting ${chain} address: ${derivationPath}, index=${addressIndex}, change=${change}`);
+      log('info', `Network: ${network}, App: ${appName}`);
+      log('info', 'Please confirm on your Ledger device...');
+
+      const account = await ledgerProvider.connect({
+        chain,
+        derivationPath,
+        addressIndex,
+        change,
+        network,  // Pass network to SDK
+        timeout: 60000,
+      });
+
+      log('success', `Ledger connected: ${account.address}`);
+      log('info', `Public Key: ${account.publicKey}`);
+      if (account.xpub) {
+        log('info', `xpub: ${account.xpub}`);
+      }
+      if (account.masterFingerprint) {
+        log('info', `Master Fingerprint: ${account.masterFingerprint}`);
+      }
+
+      // Update UI
+      updateLedgerInfo(account);
+      showLedgerInfo(true);
+      setLedgerButtons(true, true);
+
+      // Update global state
+      currentProvider = ledgerProvider;
+      connectedWalletType = 'Ledger';
+      accounts = [account];
+      updateWalletStatus();
+    }
+
+    window.getLedgerAddress = async function() {
+      if (!ledgerProvider) {
+        log('error', 'Ledger not connected, please click "Connect Device" first');
+        return;
+      }
+
+      try {
+        await getLedgerAddressInternal();
+      } catch (err) {
+        log('error', `Failed to get address: ${err.message}`);
+        if (err.message?.includes('disconnected') || err.message?.includes('already open')) {
+          log('warning', 'Device connection lost, please reconnect');
+          showLedgerInfo(false);
+          setLedgerButtons(false, false);
+          try { await ledgerProvider.disconnect(); } catch (e) {}
+          ledgerProvider = null;
+          currentProvider = null;
+          connectedWalletType = null;
+          accounts = [];
+          updateWalletStatus();
+        }
+      }
+    };
+
+    window.disconnectLedger = async function() {
+      if (ledgerProvider) {
+        try {
+          await ledgerProvider.disconnect();
+        } catch (e) {}
+        ledgerProvider = null;
+      }
+      currentProvider = null;
+      connectedWalletType = null;
+      accounts = [];
+      showLedgerInfo(false);
+      setLedgerButtons(false, false);
+      updateWalletStatus();
+      log('info', 'Ledger disconnected');
+    };
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // MetaMask Functions
+    // ═══════════════════════════════════════════════════════════════════════
+    window.connectMetaMask = async function() {
+      try {
+        log('info', 'Connecting MetaMask...');
+        const provider = new MetaMaskProvider();
+        await provider.init();
+        const account = await provider.connect({ chain: 'ETHEREUM' });
+        
+        currentProvider = provider;
+        connectedWalletType = 'MetaMask';
+        accounts = [account];
+
+        // Update UI
+        document.getElementById('metamask-address').textContent = account.address;
+        document.getElementById('metamask-chain').textContent = account.chain || 'ETHEREUM';
+        document.getElementById('metamask-info').style.display = 'grid';
+        document.getElementById('metamask-connect-btn').disabled = true;
+        document.getElementById('metamask-disconnect-btn').disabled = false;
+        updateWalletStatus();
+
+        log('success', 'MetaMask connected', account);
+      } catch (err) {
+        log('error', 'MetaMask connection failed', err.message);
+      }
+    };
+
+    window.disconnectMetaMask = async function() {
+      if (currentProvider) {
+        try { await currentProvider.disconnect(); } catch (e) {}
+      }
+      currentProvider = null;
+      connectedWalletType = null;
+      accounts = [];
+      document.getElementById('metamask-info').style.display = 'none';
+      document.getElementById('metamask-connect-btn').disabled = false;
+      document.getElementById('metamask-disconnect-btn').disabled = true;
+      updateWalletStatus();
+      log('info', 'MetaMask disconnected');
+    };
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // WalletConnect Functions
+    // ═══════════════════════════════════════════════════════════════════════
+    window.connectWalletConnect = async function(forceNew = true) {
+      try {
+        log('info', 'Connecting WalletConnect to Sepolia...');
+        const projectId = document.getElementById('wcProjectIdInput').value;
+        
+        // Always clear ALL cached WalletConnect sessions to ensure fresh connection
+        try {
+          // Clear all WalletConnect related localStorage keys
+          const keysToRemove = [];
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && (
+              key.startsWith('wc@') || 
+              key.startsWith('walletconnect') ||
+              key.startsWith('WALLETCONNECT') ||
+              key.includes('wc_') ||
+              key.includes('walletConnect')
+            )) {
+              keysToRemove.push(key);
+            }
+          }
+          keysToRemove.forEach(key => localStorage.removeItem(key));
+          
+          // Also clear sessionStorage
+          const sessionKeysToRemove = [];
+          for (let i = 0; i < sessionStorage.length; i++) {
+            const key = sessionStorage.key(i);
+            if (key && (
+              key.startsWith('wc@') || 
+              key.startsWith('walletconnect') ||
+              key.startsWith('WALLETCONNECT')
+            )) {
+              sessionKeysToRemove.push(key);
+            }
+          }
+          sessionKeysToRemove.forEach(key => sessionStorage.removeItem(key));
+          
+          log('info', `Cleared ${keysToRemove.length} localStorage + ${sessionKeysToRemove.length} sessionStorage WC entries`);
+          
+          // Clear IndexedDB WalletConnect databases
+          if (window.indexedDB) {
+            const databases = await window.indexedDB.databases?.() || [];
+            for (const db of databases) {
+              if (db.name && (db.name.includes('walletconnect') || db.name.includes('wc@') || db.name.includes('WALLET_CONNECT'))) {
+                window.indexedDB.deleteDatabase(db.name);
+                log('info', `Deleted IndexedDB: ${db.name}`);
+              }
+            }
+          }
+        } catch (e) {
+          log('warn', 'Failed to clear WC cache', e.message);
+        }
+        
+        const provider = new WalletConnectProvider({
+          projectId: projectId || undefined,
+          chains: [11155111],  // Sepolia testnet as primary (required) chain
+          optionalChains: [1],  // Mainnet as optional
+          showQrModal: true,
+        });
+        await provider.init();
+        
+        log('info', 'WalletConnect initialized, requesting connection on Sepolia (11155111)...');
+        const account = await provider.connect({ chain: 'ETHEREUM', evmChainId: 11155111, forceNew: true });
+
+        currentProvider = provider;
+        connectedWalletType = 'WalletConnect';
+        accounts = [account];
+
+        // Update UI
+        document.getElementById('wc-address').textContent = account.address;
+        document.getElementById('wc-chain').textContent = 'Sepolia (11155111)';
+        document.getElementById('wc-info').style.display = 'grid';
+        document.getElementById('wc-connect-btn').disabled = true;
+        document.getElementById('wc-disconnect-btn').disabled = false;
+        updateWalletStatus();
+
+        log('success', 'WalletConnect connected', account);
+      } catch (err) {
+        log('error', 'WalletConnect connection failed', err.message);
+      }
+    };
+
+    window.disconnectWalletConnect = async function() {
+      if (currentProvider) {
+        try { await currentProvider.disconnect(); } catch (e) {}
+      }
+      currentProvider = null;
+      connectedWalletType = null;
+      accounts = [];
+      document.getElementById('wc-info').style.display = 'none';
+      document.getElementById('wc-connect-btn').disabled = false;
+      document.getElementById('wc-disconnect-btn').disabled = true;
+      updateWalletStatus();
+      log('info', 'WalletConnect disconnected');
+    };
+
+    window.fillSignerFromWallet = function() {
+      if (accounts.length > 0) {
+        const account = accounts[0];
+        document.getElementById('signerName').value = `${connectedWalletType} Signer`;
+        
+        // Set device type based on wallet type
+        const deviceTypeMap = {
+          'MetaMask': 'METAMASK',
+          'Ledger': 'LEDGER',
+          'WalletConnect': 'HOT',
+        };
+        document.getElementById('signerDeviceType').value = deviceTypeMap[connectedWalletType] || 'HOT';
+        
+        // Set chain type and toggle BTC fields visibility
+        const isBtc = account.chain === 'BITCOIN';
+        document.getElementById('signerChain').value = isBtc ? 'BTC' : 'EVM';
+        document.getElementById('btc-signer-fields').style.display = isBtc ? 'block' : 'none';
+        
+        // Fill address and/or public key
+        if (isBtc) {
+          document.getElementById('signerPubkey').value = account.publicKey || '';
+          document.getElementById('signerAddress').value = account.address || '';
+          
+          // Fill BTC extension fields - use ACCOUNT-LEVEL path (not full address path)
+          // e.g., m/48'/0'/0'/2' instead of m/48'/0'/0'/2'/0/0
+          let derivationPath = account.derivationPath || '';
+          if (derivationPath) {
+            // Extract account-level path: m/48'/coin'/account'/2'
+            const match = derivationPath.match(/^(m\/\d+'\/\d+'\/\d+'\/2')(?:\/.*)?$/);
+            if (match) {
+              derivationPath = match[1];
+            }
+          }
+          document.getElementById('signerDerivationPath').value = derivationPath;
+          document.getElementById('signerMasterFingerprint').value = account.masterFingerprint || '';
+          document.getElementById('signerXpub').value = account.xpub || '';
+          
+          log('info', `Using account-level derivation path: ${derivationPath}`);
+        } else {
+          document.getElementById('signerAddress').value = account.address || '';
+          document.getElementById('signerPubkey').value = account.publicKey || '';
+          // Clear BTC extension fields
+          document.getElementById('signerDerivationPath').value = '';
+          document.getElementById('signerMasterFingerprint').value = '';
+          document.getElementById('signerXpub').value = '';
+        }
+        
+        log('info', 'Filled signer info from connected wallet', account);
+      } else {
+        log('warning', 'No wallet connected');
+      }
+    };
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Signer API
+    // ═══════════════════════════════════════════════════════════════════════
+    window.createSigner = async function() {
+      const name = document.getElementById('signerName').value;
+      const deviceType = document.getElementById('signerDeviceType').value;
+      const chainType = document.getElementById('signerChain').value;
+      const address = document.getElementById('signerAddress').value;
+      const pubkey = document.getElementById('signerPubkey').value;
+      
+      // BTC extension fields
+      const derivationPath = document.getElementById('signerDerivationPath').value;
+      const masterFingerprint = document.getElementById('signerMasterFingerprint').value;
+      const xpub = document.getElementById('signerXpub').value;
+
+      if (!name) {
+        log('warning', 'Please enter a name');
+        return;
+      }
+
+      // EVM requires address, BTC requires public_key
+      if (chainType === 'EVM' && !address) {
+        log('warning', 'EVM signer requires an address');
+        return;
+      }
+      if (chainType === 'BTC' && !pubkey) {
+        log('warning', 'BTC signer requires a public key');
+        return;
+      }
+
+      try {
+        const body = {
+          name,
+          device_type: deviceType,
+          chain_type: chainType,
+        };
+        
+        if (address) body.address = address;
+        if (pubkey) body.public_key = pubkey;
+        
+        // Add BTC extension fields if present
+        if (chainType === 'BTC') {
+          if (derivationPath) body.derivation_path = derivationPath;
+          if (masterFingerprint) body.master_fingerprint = masterFingerprint;
+          if (xpub) body.xpub = xpub;
+        }
+
+        // WATCH_ONLY doesn't require signature verification
+        if (deviceType === 'WATCH_ONLY') {
+          const data = await apiRequest('POST', '/signers', body);
+          log('success', 'Signer created (watch-only)', data);
+          return;
+        }
+
+        // For other device types, need challenge-sign flow
+        if (!currentProvider) {
+          log('warning', 'Please connect a wallet first to sign the challenge');
+          return;
+        }
+
+        // Step 1: Request challenge from backend
+        log('info', 'Requesting challenge from backend...');
+        const challengeReq = { chain_type: chainType };
+        if (address) challengeReq.address = address;
+        if (pubkey) challengeReq.public_key = pubkey;
+        
+        const challengeRes = await apiRequest('POST', '/signers/challenge', challengeReq);
+        const challenge = challengeRes.data.challenge;
+        log('info', `Got challenge: ${challenge}`);
+
+        // Step 2: Sign challenge with wallet
+        log('info', 'Requesting signature from wallet...');
+        const signResult = await currentProvider.signMessage(challenge, accounts[0]);
+        log('success', 'Challenge signed', signResult);
+
+        // Step 3: Submit signer with challenge and signature
+        body.challenge = challenge;
+        body.signature = signResult.signature;
+        
+        const data = await apiRequest('POST', '/signers', body);
+        log('success', 'Signer created and verified', data);
+      } catch (err) {
+        // More detailed error logging
+        const errorMsg = err.message || String(err);
+        const errorData = err.cause || err.details || err;
+        log('error', `Create signer failed: ${errorMsg}`, typeof errorData === 'object' ? errorData : { raw: errorData });
+      }
+    };
+
+    window.listSigners = async function() {
+      try {
+        const data = await apiRequest('GET', '/signers');
+        const container = document.getElementById('signerListContainer');
+        const items = data.data || [];
+
+        if (items.length === 0) {
+          container.innerHTML = '<div class="empty-state">暂无 Signer</div>';
+          return;
+        }
+
+        container.innerHTML = `
+          <table class="data-table">
+            <thead><tr><th>ID</th><th>Name</th><th>Type</th><th>Chain</th><th>Address/PubKey</th></tr></thead>
+            <tbody>
+              ${items.map(s => `
+                <tr>
+                  <td class="mono">${s.id.slice(0, 8)}...</td>
+                  <td>${s.name}</td>
+                  <td>${s.device_type}</td>
+                  <td>${s.chain_type}</td>
+                  <td class="mono">${(s.address || s.public_key || '-').slice(0, 16)}...</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      } catch (err) {
+        // logged
+      }
+    };
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Wallet API
+    // ═══════════════════════════════════════════════════════════════════════
+    window.createWallet = async function() {
+      const name = document.getElementById('walletName').value;
+      const threshold = parseInt(document.getElementById('walletThreshold').value);
+      const chainType = document.getElementById('walletChainType').value;
+      const signerIds = document.getElementById('walletSignerIds').value
+        .split(',')
+        .map(s => s.trim().replace(/^"|"$/g, ''))  // Remove any surrounding quotes
+        .filter(s => s);
+
+      if (!name || signerIds.length === 0) {
+        log('warning', 'Please fill all required fields');
+        return;
+      }
+
+      try {
+        const data = await apiRequest('POST', '/wallets', {
+          name,
+          chain_type: chainType,
+          threshold,
+          signer_ids: signerIds,
+        });
+        log('success', 'Wallet created', data);
+      } catch (err) {
+        const errorMsg = err.message || String(err);
+        log('error', `Create wallet failed: ${errorMsg}`);
+      }
+    };
+
+    window.listWallets = async function() {
+      try {
+        const data = await apiRequest('GET', '/wallets');
+        const container = document.getElementById('walletListContainer');
+        const items = data.data || [];
+
+        if (items.length === 0) {
+          container.innerHTML = '<div class="empty-state">暂无 Wallet</div>';
+          return;
+        }
+
+        container.innerHTML = `
+          <table class="data-table">
+            <thead><tr><th>ID</th><th>Name</th><th>Chain</th><th>Threshold</th><th>Status</th><th>操作</th></tr></thead>
+            <tbody>
+              ${items.map(w => `
+                <tr>
+                  <td class="mono">${w.id.slice(0, 8)}...</td>
+                  <td>${w.name}</td>
+                  <td>${w.chain_type}</td>
+                  <td>${w.threshold}/${w.signer_count || w.signers?.length || '?'}</td>
+                  <td class="${w.status === 'ACTIVE' ? 'text-success' : w.status === 'PENDING_DEPLOY' ? 'text-warning' : ''}">${w.status}</td>
+                  <td>
+                    <button class="btn btn-sm btn-secondary" onclick="selectWallet('${w.id}')">选择</button>
+                    ${w.status === 'PENDING_DEPLOY' && w.chain_type === 'EVM' ? `<button class="btn btn-sm btn-primary" onclick="selectWalletForDeploy('${w.id}')">部署</button>` : ''}
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      } catch (err) {
+        // logged
+      }
+    };
+
+    window.selectWallet = function(walletId) {
+      document.getElementById('txWalletId').value = walletId;
+      document.getElementById('txListWalletId').value = walletId;
+      document.getElementById('assetWalletId').value = walletId;
+      log('info', `Selected wallet: ${walletId}`);
+    };
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Safe Deployment
+    // ═══════════════════════════════════════════════════════════════════════
+    let currentDeploymentInfo = null;
+
+    window.selectWalletForDeploy = function(walletId) {
+      document.getElementById('deployWalletId').value = walletId;
+      // Switch to deploy tab
+      const section = document.querySelector('#wallet-mgmt-panel .section-body');
+      section.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      section.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+      section.querySelector('.tab:nth-child(3)').classList.add('active');
+      document.getElementById('wallet-deploy').style.display = 'block';
+      // Auto-fetch deployment info
+      getDeploymentInfo();
+    };
+
+    window.getDeploymentInfo = async function() {
+      const walletId = document.getElementById('deployWalletId').value;
+      if (!walletId) {
+        log('warning', 'Please enter a wallet ID');
+        return;
+      }
+
+      try {
+        const data = await apiRequest('GET', `/wallets/${walletId}/deployment`);
+        currentDeploymentInfo = data.data;
+
+        document.getElementById('deployPredictedAddress').value = currentDeploymentInfo.predicted_address;
+        document.getElementById('deploymentInfo').style.display = 'block';
+        document.getElementById('deploymentInfoJson').textContent = JSON.stringify(currentDeploymentInfo, null, 2);
+
+        // Enable deploy button if not already deployed
+        if (!currentDeploymentInfo.is_deployed && currentDeploymentInfo.deployment_tx) {
+          document.getElementById('deployBtn').disabled = false;
+        } else if (currentDeploymentInfo.is_deployed) {
+          log('info', 'Safe is already deployed at this address');
+          document.getElementById('deployBtn').disabled = true;
+        }
+
+        log('success', 'Got deployment info', currentDeploymentInfo);
+      } catch (err) {
+        currentDeploymentInfo = null;
+        document.getElementById('deployBtn').disabled = true;
+      }
+    };
+
+    // Expected chain ID for Safe deployment (Sepolia testnet)
+    const EXPECTED_CHAIN_ID = 11155111;
+    const CHAIN_NAMES = {
+      1: 'Ethereum Mainnet',
+      11155111: 'Sepolia Testnet',
+      137: 'Polygon',
+      42161: 'Arbitrum One',
+      8453: 'Base',
+    };
+
+    window.deploySafe = async function() {
+      if (!currentDeploymentInfo || !currentDeploymentInfo.deployment_tx) {
+        log('warning', 'No deployment info available');
+        return;
+      }
+
+      if (!currentProvider) {
+        log('warning', 'Please connect a wallet first');
+        return;
+      }
+
+      const walletId = document.getElementById('deployWalletId').value;
+      const deployTx = currentDeploymentInfo.deployment_tx;
+
+      try {
+        // Check network before sending transaction
+        if (connectedWalletType === 'MetaMask' && window.ethereum) {
+          const chainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
+          const currentChainId = parseInt(chainIdHex, 16);
+
+          if (currentChainId !== EXPECTED_CHAIN_ID) {
+            const currentName = CHAIN_NAMES[currentChainId] || `Chain ${currentChainId}`;
+            const expectedName = CHAIN_NAMES[EXPECTED_CHAIN_ID] || `Chain ${EXPECTED_CHAIN_ID}`;
+            log('warning', `Network mismatch: MetaMask is on ${currentName}, but backend expects ${expectedName}`);
+
+            // Try to switch network
+            try {
+              await window.ethereum.request({
+                method: 'wallet_switchEthereumChain',
+                params: [{ chainId: '0x' + EXPECTED_CHAIN_ID.toString(16) }],
+              });
+              log('success', `Switched to ${expectedName}`);
+            } catch (switchErr) {
+              if (switchErr.code === 4902) {
+                log('error', `Please add ${expectedName} to MetaMask manually`);
+              } else {
+                log('error', `Failed to switch network: ${switchErr.message}`);
+              }
+              return;
+            }
+          }
+        }
+        log('info', 'Sending deployment transaction...');
+
+        // Get the connected wallet's provider to send transaction
+        // We need to use eth_sendTransaction via the provider
+        const account = accounts[0];
+
+        // For MetaMask/WalletConnect, we can access the underlying provider
+        let txHash;
+
+        if (connectedWalletType === 'MetaMask' && window.ethereum) {
+          // Ensure data has 0x prefix
+          let txData = deployTx.data;
+          if (!txData.startsWith('0x')) {
+            txData = '0x' + txData;
+          }
+
+          // Use MetaMask's eth_sendTransaction
+          const tx = {
+            from: account.address,
+            to: deployTx.to,
+            data: txData,
+            value: '0x' + (deployTx.value || 0).toString(16),
+          };
+
+          log('info', 'Requesting transaction signature...', tx);
+
+          try {
+            txHash = await window.ethereum.request({
+              method: 'eth_sendTransaction',
+              params: [tx],
+            });
+          } catch (sendErr) {
+            // MetaMask returns detailed error info
+            const errorMsg = sendErr.message || 'Unknown error';
+            const errorCode = sendErr.code || 'N/A';
+            log('error', `MetaMask error (code: ${errorCode})`, errorMsg);
+            throw sendErr;
+          }
+        } else {
+          throw new Error('Deployment currently only supported with MetaMask');
+        }
+
+        log('success', `Deployment transaction sent: ${txHash}`);
+
+        // Wait for confirmation
+        log('info', 'Waiting for transaction confirmation...');
+
+        // Poll for transaction receipt
+        let receipt = null;
+        let attempts = 0;
+        while (!receipt && attempts < 60) {
+          await new Promise(r => setTimeout(r, 2000));
+          try {
+            receipt = await window.ethereum.request({
+              method: 'eth_getTransactionReceipt',
+              params: [txHash],
+            });
+          } catch (e) {}
+          attempts++;
+        }
+
+        if (receipt && receipt.status === '0x1') {
+          log('success', 'Deployment transaction confirmed!', receipt);
+
+          // Activate wallet in backend
+          log('info', 'Activating wallet in backend...');
+          const activateData = await apiRequest('POST', `/wallets/${walletId}/activate`, {
+            address: currentDeploymentInfo.predicted_address,
+            tx_hash: txHash,
+            salt: String(currentDeploymentInfo.salt_nonce),
+            factory_address: currentDeploymentInfo.factory_address,
+          });
+
+          log('success', 'Wallet activated!', activateData);
+
+          document.getElementById('deployResult').style.display = 'block';
+          document.getElementById('deployResult').textContent = JSON.stringify({
+            tx_hash: txHash,
+            address: currentDeploymentInfo.predicted_address,
+            status: 'ACTIVE',
+          }, null, 2);
+
+          // Disable deploy button
+          document.getElementById('deployBtn').disabled = true;
+        } else if (receipt && receipt.status === '0x0') {
+          throw new Error('Transaction failed');
+        } else {
+          log('warning', 'Transaction pending - check explorer for status');
+        }
+      } catch (err) {
+        log('error', 'Deployment failed', err.message);
+      }
+    };
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Assets API
+    // ═══════════════════════════════════════════════════════════════════════
+    window.getWalletAssets = async function() {
+      const walletId = document.getElementById('assetWalletId').value;
+      if (!walletId) {
+        log('warning', 'Please enter wallet ID');
+        return;
+      }
+
+      try {
+        const resp = await apiRequest('GET', `/wallets/${walletId}/assets`);
+        const assets = resp.data || [];
+        log('success', `Found ${assets.length} assets`, assets);
+        renderAssetsList(assets);
+      } catch (err) {
+        // logged in apiRequest
+      }
+    };
+
+    window.syncWalletAssets = async function() {
+      const walletId = document.getElementById('assetWalletId').value;
+      if (!walletId) {
+        log('warning', 'Please enter wallet ID');
+        return;
+      }
+
+      try {
+        log('info', 'Syncing assets from blockchain...');
+        const resp = await apiRequest('POST', `/wallets/${walletId}/assets/sync`);
+        const syncData = resp.data || {};
+        log('success', `Synced ${syncData.synced_count || 0} assets`, syncData);
+        renderAssetsList(syncData.assets || []);
+      } catch (err) {
+        // logged in apiRequest
+      }
+    };
+
+    window.importToken = async function() {
+      const walletId = document.getElementById('assetWalletId').value;
+      const contractAddress = document.getElementById('tokenContractAddress').value;
+      const symbol = document.getElementById('tokenSymbol').value;
+
+      if (!walletId) {
+        log('warning', 'Please enter wallet ID first');
+        return;
+      }
+      if (!contractAddress) {
+        log('warning', 'Please enter token contract address');
+        return;
+      }
+
+      try {
+        log('info', `Importing token ${contractAddress}...`);
+        const body = { contract_address: contractAddress };
+        if (symbol) body.symbol = symbol;
+
+        const resp = await apiRequest('POST', `/wallets/${walletId}/assets`, body);
+        log('success', `Token imported: ${resp.data.symbol}`, resp.data);
+
+        // Clear input
+        document.getElementById('tokenContractAddress').value = '';
+        document.getElementById('tokenSymbol').value = '';
+
+        // Refresh asset list
+        await syncWalletAssets();
+      } catch (err) {
+        // logged in apiRequest
+      }
+    };
+
+    function renderAssetsList(assets) {
+      const container = document.getElementById('assetsList');
+      if (!assets || assets.length === 0) {
+        container.innerHTML = '<div class="empty-state">暂无资产记录</div>';
+        return;
+      }
+
+      const formatBalance = (balance, decimals) => {
+        const num = parseFloat(balance) / Math.pow(10, decimals || 18);
+        return num.toLocaleString(undefined, { maximumFractionDigits: 8 });
+      };
+
+      let html = '<div class="asset-grid">';
+      for (const asset of assets) {
+        const symbol = asset.symbol || 'UNKNOWN';
+        const name = asset.name || 'Unknown Token';
+        const balance = formatBalance(asset.balance, asset.decimals);
+        const isNative = asset.contract_address === null || asset.contract_address === '0x0000000000000000000000000000000000000000';
+
+        html += `
+          <div class="asset-card">
+            <div class="asset-header">
+              <span class="asset-symbol">${symbol}</span>
+              ${isNative ? '<span class="badge">Native</span>' : ''}
+            </div>
+            <div class="asset-balance">${balance}</div>
+            <div class="asset-name">${name}</div>
+            ${asset.contract_address && !isNative ? `<div class="asset-contract" title="${asset.contract_address}">${asset.contract_address.slice(0, 10)}...${asset.contract_address.slice(-8)}</div>` : ''}
+          </div>
+        `;
+      }
+      html += '</div>';
+      container.innerHTML = html;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Transaction API
+    // ═══════════════════════════════════════════════════════════════════════
+    window.createTransaction = async function() {
+      const walletId = document.getElementById('txWalletId').value;
+      const toAddress = document.getElementById('txToAddress').value;
+      const amount = document.getElementById('txAmount').value;
+      const token = document.getElementById('txToken').value;
+      const description = document.getElementById('txDesc').value;
+
+      if (!walletId || !toAddress || !amount) {
+        log('warning', 'Please fill required fields');
+        return;
+      }
+
+      try {
+        const body = {
+          to_address: toAddress,
+          amount: amount,
+          description: description || undefined,
+        };
+        if (token) body.token_address = token;
+
+        const data = await apiRequest('POST', `/wallets/${walletId}/transactions`, body);
+        log('success', 'Transaction created', data);
+
+        // Auto-fill for signing
+        document.getElementById('signTxId').value = data.id;
+      } catch (err) {
+        // logged
+      }
+    };
+
+    window.confirmTransaction = async function() {
+      const txId = document.getElementById('signTxId').value;
+
+      if (!txId) {
+        log('warning', 'Please enter transaction ID');
+        return;
+      }
+
+      try {
+        // NOTE: OOB verification temporarily disabled
+        const data = await apiRequest('POST', `/transactions/${txId}/confirm`, {});
+        log('success', 'Transaction confirmed', data);
+      } catch (err) {
+        // logged
+      }
+    };
+
+    window.registerWalletPolicy = async function() {
+      const txId = document.getElementById('signTxId').value;
+
+      if (!txId) {
+        log('warning', 'Please enter transaction ID');
+        return;
+      }
+
+      if (!currentProvider || connectedWalletType !== 'Ledger') {
+        log('warning', 'Please connect Ledger first');
+        return;
+      }
+
+      try {
+        // Get transaction and wallet info
+        const tx = await apiRequest('GET', `/transactions/${txId}`);
+        const wallet = await apiRequest('GET', `/wallets/${tx.data.wallet_id}`);
+
+        // Check if this is a BTC wallet
+        const chainType = wallet.data?.chain_type?.toUpperCase();
+        if (chainType !== 'BTC') {
+          log('warning', 'Wallet policy registration only needed for BTC multisig');
+          return;
+        }
+
+        // === Network Validation: Check Ledger app matches wallet network ===
+        const walletAddress = wallet.data?.address || '';
+        const connectedAddress = accounts[0]?.address || '';
+        
+        let expectedNetwork = 'unknown';
+        if (walletAddress.startsWith('bc1')) {
+          expectedNetwork = 'mainnet';
+        } else if (walletAddress.startsWith('tb1')) {
+          expectedNetwork = 'testnet';
+        }
+        
+        let actualNetwork = 'unknown';
+        if (connectedAddress.startsWith('bc1')) {
+          actualNetwork = 'mainnet';
+        } else if (connectedAddress.startsWith('tb1')) {
+          actualNetwork = 'testnet';
+        }
+        
+        log('info', `Network validation: wallet=${expectedNetwork}, ledger=${actualNetwork}`);
+        
+        if (expectedNetwork !== actualNetwork) {
+          const appName = expectedNetwork === 'testnet' ? 'Bitcoin Test' : 'Bitcoin';
+          const errorMsg = `Network mismatch! Wallet is ${expectedNetwork}, but Ledger is connected with ${actualNetwork} app.\n\nPlease:\n1. Open the "${appName}" app on your Ledger device\n2. Reconnect using the "Connect" button\n3. Then register the policy again`;
+          log('error', errorMsg);
+          alert(errorMsg);
+          return;
+        }
+
+        // Build wallet policy from signers
+        // IMPORTANT: Each signer MUST have a unique xpub (different account)
+        // Format: wsh(sortedmulti(m,@0/**,@1/**,...))
+        const signers = wallet.data.signers || [];
+        if (signers.length === 0) {
+          log('error', 'No signers found in wallet');
+          return;
+        }
+
+        // Build keys array - each signer becomes one key
+        // Keys must be sorted by public key for sortedmulti
+        const keyInfos = [];
+        for (const s of signers) {
+          if (!s.master_fingerprint || !s.derivation_path || !s.xpub) {
+            log('error', `Signer ${s.name} missing required BTC fields (master_fingerprint, derivation_path, xpub)`);
+            return;
+          }
+          
+          // Use account-level path (e.g., 84'/0'/0') for key info
+          let accountPath = s.derivation_path.replace(/^m\//, '');
+          // If full path given, extract account level
+          const parts = accountPath.split('/');
+          if (parts.length > 3) {
+            accountPath = parts.slice(0, 3).join('/');
+          }
+          
+          const keyInfo = `[${s.master_fingerprint}/${accountPath}]${s.xpub}`;
+          keyInfos.push({ keyInfo, pubkey: s.public_key, signer: s });
+        }
+
+        // Sort keys by public key (as sortedmulti expects)
+        keyInfos.sort((a, b) => a.pubkey.localeCompare(b.pubkey));
+        const keys = keyInfos.map(k => k.keyInfo);
+
+        // Check for duplicate xpubs (common mistake)
+        const uniqueXpubs = new Set(keyInfos.map(k => k.signer.xpub));
+        if (uniqueXpubs.size < keyInfos.length) {
+          log('error', '⚠️ Duplicate xpubs detected! Each signer must use a different BTC account.');
+          log('error', 'Use "BTC 账户快速切换" to get xpub from different accounts (账户 0, 账户 1, etc.)');
+          return;
+        }
+
+        // Build descriptor template: @0/**,@1/**,...
+        const keyRefs = keys.map((_, i) => `@${i}/**`);
+        
+        const m = wallet.data.threshold;
+        const walletPolicy = {
+          name: `BTC ${m}-of-${signers.length}`,
+          descriptorTemplate: `wsh(sortedmulti(${m},${keyRefs.join(',')}))`,
+          keys: keys,
+        };
+
+        log('info', '=== Registering Wallet Policy ===');
+        log('info', 'Sorted keyInfos (by pubkey):');
+        keyInfos.forEach((k, i) => {
+          log('info', `  @${i}: pubkey=${k.pubkey}, keyInfo=${k.keyInfo}`);
+        });
+        log('info', 'Policy descriptor:', walletPolicy.descriptorTemplate);
+        log('info', 'Policy keys:');
+        keys.forEach((k, i) => log('info', `  @${i}: ${k}`));
+        log('info', '=================================');
+
+        // Register policy on Ledger
+        const result = await ledgerProvider.registerWalletPolicy(walletPolicy);
+        
+        log('success', 'Wallet policy registered!', {
+          policyId: result.id?.toString('hex'),
+          hmac: result.hmac?.toString('hex'),
+        });
+
+        // Save HMAC to backend for each signer that belongs to connected Ledger
+        const hmacHex = result.hmac.toString('hex');
+        const connectedPubkey = accounts[0]?.publicKey?.toLowerCase();
+        
+        for (const s of signers) {
+          if (s.public_key?.toLowerCase() === connectedPubkey) {
+            try {
+              await apiRequest('PATCH', `/wallets/${wallet.data.id}/signers/${s.id}/hmac`, {
+                hmac: hmacHex,
+              });
+              log('success', `HMAC saved for signer ${s.name}`);
+            } catch (err) {
+              log('error', `Failed to save HMAC for signer ${s.name}`, err.message);
+            }
+          }
+        }
+
+        // Store HMAC in memory for immediate use
+        window._lastPolicyHmac = result.hmac;
+        // Store the EXACT wallet policy used during registration for signing
+        window._registeredWalletPolicy = walletPolicy;
+        log('info', 'HMAC and policy stored for signing. You can now sign the transaction.');
+
+      } catch (err) {
+        log('error', 'Register wallet policy failed', err.message);
+      }
+    };
+
+    window.signTransaction = async function() {
+      const txId = document.getElementById('signTxId').value;
+
+      if (!txId) {
+        log('warning', 'Please enter transaction ID');
+        return;
+      }
+
+      if (!currentProvider) {
+        log('warning', 'Please connect a wallet first');
+        return;
+      }
+
+      try {
+        // 1. Get transaction details
+        log('info', 'Fetching transaction details...');
+        const tx = await apiRequest('GET', `/transactions/${txId}`);
+
+        // 2. Get wallet to determine chain type
+        const wallet = await apiRequest('GET', `/wallets/${tx.data.wallet_id}`);
+        const chainType = wallet.data?.chain_type;
+
+        log('info', `Transaction chain type: ${chainType}`);
+
+        // 3. Sign based on chain type
+        log('info', 'Requesting signature from wallet...');
+        let signature;
+        let signerId = null;
+
+        if (chainType === 'EVM') {
+          // EVM Safe transaction: sign using EIP-712 typed data
+          if (!tx.data?.payload || !tx.data?.payload_hash) {
+            throw new Error('No payload or payload_hash for EVM transaction');
+          }
+
+          // Parse the typed data from payload
+          let typedData;
+          try {
+            typedData = JSON.parse(tx.data.payload);
+          } catch (e) {
+            throw new Error('Failed to parse EIP-712 typed data from payload');
+          }
+
+          log('info', 'Signing EIP-712 typed data...', { 
+            safeTxHash: tx.data.payload_hash,
+            primaryType: typedData.primaryType 
+          });
+
+          // Use signTransaction for EIP-712 signing
+          const evmPayload = {
+            type: 'evm',
+            typedData: typedData,
+            safeTxHash: tx.data.payload_hash,
+          };
+          signature = await currentProvider.signTransaction(evmPayload, accounts[0]);
+
+          // Find signer ID by EVM address
+          const signerAddr = accounts[0].address.toLowerCase();
+          if (wallet.data?.signers) {
+            for (const s of wallet.data.signers) {
+              if (s.address?.toLowerCase() === signerAddr) {
+                signerId = s.id;
+                break;
+              }
+            }
+          }
+          if (!signerId) {
+            const signers = await apiRequest('GET', '/signers');
+            for (const s of (signers.data || [])) {
+              if (s.address?.toLowerCase() === signerAddr) {
+                signerId = s.id;
+                break;
+              }
+            }
+          }
+
+        } else if (chainType === 'BTC') {
+          // BTC: sign the PSBT using signTransaction
+          if (!tx.data?.payload) {
+            throw new Error('No PSBT payload for BTC transaction');
+          }
+
+          // Check if we have walletPolicy data from backend
+          // For now, we'll use a simplified approach - the backend should provide this
+          const btcPayload = {
+            type: 'btc',
+            psbt: tx.data.payload,
+            txType: 'native-segwit',
+            isMultisig: true,
+            // walletPolicy and walletHmac should come from backend tx response
+            // For now, we need to construct it from wallet info
+            walletPolicy: tx.data?.wallet_policy || null,
+            walletHmac: tx.data?.wallet_hmac || null,
+          };
+
+          // PRIORITY 1: Use the EXACT policy from recent registration (guaranteed to match HMAC)
+          if (!btcPayload.walletPolicy && window._registeredWalletPolicy) {
+            btcPayload.walletPolicy = window._registeredWalletPolicy;
+            log('info', 'Using registered wallet policy from memory', btcPayload.walletPolicy);
+          }
+
+          // PRIORITY 2: If no registered policy, construct from wallet signers
+          if (!btcPayload.walletPolicy && wallet.data?.signers?.length > 0) {
+            // Build wallet policy from signers
+            // IMPORTANT: Each signer MUST have a unique xpub (different account)
+            const keyInfos = [];
+            for (const s of wallet.data.signers) {
+              if (!s.master_fingerprint || !s.derivation_path || !s.xpub) {
+                log('error', `Signer ${s.name} missing required BTC fields`);
+                throw new Error(`Signer ${s.name} missing BTC fields (master_fingerprint, derivation_path, xpub)`);
+              }
+              
+              // Use account-level path for key info
+              let accountPath = s.derivation_path.replace(/^m\//, '');
+              const parts = accountPath.split('/');
+              if (parts.length > 3) {
+                accountPath = parts.slice(0, 3).join('/');
+              }
+              
+              const keyInfo = `[${s.master_fingerprint}/${accountPath}]${s.xpub}`;
+              keyInfos.push({ keyInfo, pubkey: s.public_key, signer: s });
+            }
+            
+            // Sort keys by public key (sortedmulti expects sorted keys)
+            keyInfos.sort((a, b) => a.pubkey.localeCompare(b.pubkey));
+            const keys = keyInfos.map(k => k.keyInfo);
+            
+            // Check for duplicate xpubs
+            const uniqueXpubs = new Set(keyInfos.map(k => k.signer.xpub));
+            if (uniqueXpubs.size < keyInfos.length) {
+              log('error', '⚠️ Duplicate xpubs detected! Each signer must use a different BTC account.');
+              throw new Error('Duplicate xpubs in signers. Use different BTC accounts for each signer.');
+            }
+            
+            // Build descriptor template: @0/**,@1/**,...
+            const keyRefs = keys.map((_, i) => `@${i}/**`);
+            
+            const m = wallet.data.threshold;
+            btcPayload.walletPolicy = {
+              name: `BTC ${m}-of-${wallet.data.signers.length}`,
+              descriptorTemplate: `wsh(sortedmulti(${m},${keyRefs.join(',')}))`,
+              keys: keys,
+            };
+            log('info', 'Constructed wallet policy from signers', btcPayload.walletPolicy);
+          }
+
+          if (!btcPayload.walletPolicy) {
+            log('warning', 'No wallet policy available. Ledger multisig signing requires registered wallet policy.');
+            throw new Error('BTC multisig signing requires wallet policy. Please register the policy on Ledger first.');
+          }
+
+          // Try to get HMAC from: 1) connected signer's stored HMAC, 2) in-memory from recent registration
+          if (!btcPayload.walletHmac) {
+            const connectedPubkey = accounts[0]?.publicKey?.toLowerCase();
+            // Check if any signer has stored HMAC
+            if (wallet.data?.signers) {
+              for (const s of wallet.data.signers) {
+                if (s.ledger_policy_hmac) {
+                  btcPayload.walletHmac = s.ledger_policy_hmac;
+                  log('info', `Using stored HMAC from signer ${s.name}`);
+                  break;
+                }
+              }
+            }
+            // Fallback to in-memory HMAC from recent registration
+            if (!btcPayload.walletHmac && window._lastPolicyHmac) {
+              btcPayload.walletHmac = window._lastPolicyHmac.toString('hex');
+              log('info', 'Using in-memory HMAC from recent policy registration');
+            }
+          }
+
+          if (!btcPayload.walletHmac) {
+            log('warning', 'No wallet HMAC found. Click "注册 BTC 多签 Policy" button first.');
+            throw new Error('BTC multisig signing requires wallet policy registration. Please register the policy on Ledger first.');
+          }
+
+          // === Network Validation: Check Ledger app matches wallet network ===
+          // Wallet address prefix determines expected network:
+          //   - bc1... = mainnet (Bitcoin app)
+          //   - tb1... = testnet (Bitcoin Test app)
+          const walletAddress = wallet.data?.address || '';
+          const connectedAddress = accounts[0]?.address || '';
+          
+          // Detect expected network from wallet address
+          let expectedNetwork = 'unknown';
+          if (walletAddress.startsWith('bc1')) {
+            expectedNetwork = 'mainnet';
+          } else if (walletAddress.startsWith('tb1')) {
+            expectedNetwork = 'testnet';
+          }
+          
+          // Detect actual network from connected Ledger address
+          let actualNetwork = 'unknown';
+          if (connectedAddress.startsWith('bc1')) {
+            actualNetwork = 'mainnet';
+          } else if (connectedAddress.startsWith('tb1')) {
+            actualNetwork = 'testnet';
+          }
+          
+          log('info', `Network validation: wallet=${expectedNetwork}, ledger=${actualNetwork}`);
+          
+          if (expectedNetwork !== actualNetwork) {
+            const appName = expectedNetwork === 'testnet' ? 'Bitcoin Test' : 'Bitcoin';
+            const errorMsg = `Network mismatch! Wallet is ${expectedNetwork}, but Ledger is connected with ${actualNetwork} app.\n\nPlease open the "${appName}" app on your Ledger device and reconnect.`;
+            log('error', errorMsg);
+            throw new Error(errorMsg);
+          }
+
+          // Debug: log full signing context
+          log('info', '=== BTC Signing Context ===');
+          log('info', 'Network:', expectedNetwork);
+          log('info', 'Connected account:', {
+            address: accounts[0].address,
+            publicKey: accounts[0].publicKey,
+            derivationPath: accounts[0].derivationPath,
+            masterFingerprint: accounts[0].masterFingerprint,
+          });
+          log('info', 'Wallet Policy name:', btcPayload.walletPolicy?.name);
+          log('info', 'Wallet Policy descriptor:', btcPayload.walletPolicy?.descriptorTemplate);
+          log('info', 'Wallet Policy keys:');
+          if (btcPayload.walletPolicy?.keys) {
+            btcPayload.walletPolicy.keys.forEach((k, i) => {
+              log('info', `  @${i}: ${k}`);
+            });
+          }
+          log('info', 'HMAC:', btcPayload.walletHmac);
+          log('info', 'PSBT (full base64):', btcPayload.psbt);
+          
+          // Decode and log PSBT details
+          try {
+            const psbtBytes = Uint8Array.from(atob(btcPayload.psbt), c => c.charCodeAt(0));
+            log('info', 'PSBT bytes length:', psbtBytes.length);
+            log('info', 'PSBT hex:', Array.from(psbtBytes).map(b => b.toString(16).padStart(2, '0')).join(''));
+          } catch (e) {
+            log('warning', 'Failed to decode PSBT:', e.message);
+          }
+          log('info', '===========================');
+
+          signature = await currentProvider.signTransaction(btcPayload, accounts[0]);
+
+          // Find signer ID by public key for BTC
+          const signerPubkey = accounts[0].publicKey?.toLowerCase();
+          if (wallet.data?.signers) {
+            for (const s of wallet.data.signers) {
+              if (s.public_key?.toLowerCase() === signerPubkey) {
+                signerId = s.id;
+                break;
+              }
+            }
+          }
+          if (!signerId && signerPubkey) {
+            const signers = await apiRequest('GET', '/signers?chain_type=BTC');
+            for (const s of (signers.data || [])) {
+              if (s.public_key?.toLowerCase() === signerPubkey) {
+                signerId = s.id;
+                break;
+              }
+            }
+          }
+
+        } else {
+          throw new Error(`Unsupported chain type: ${chainType}`);
+        }
+
+        if (!signerId) {
+          throw new Error(`No signer found matching connected account`);
+        }
+
+        log('success', 'Got signature', { signature: signature.signature });
+        log('info', `Found signer ID: ${signerId}`);
+
+        // 4. Submit signature to backend
+        const result = await apiRequest('POST', `/transactions/${txId}/sign?signer_id=${signerId}`, {
+          signature_data: signature.signature,
+        });
+
+        document.getElementById('signResult').style.display = 'block';
+        document.getElementById('signResult').textContent = JSON.stringify(result, null, 2);
+
+        log('success', 'Signature submitted', result);
+      } catch (err) {
+        log('error', 'Sign transaction failed', err.message);
+      }
+    };
+
+    window.executeTransaction = async function() {
+      const txId = document.getElementById('signTxId').value;
+
+      if (!txId) {
+        log('warning', 'Please enter transaction ID');
+        return;
+      }
+
+      try {
+        // First, get the transaction to determine chain type
+        const txResp = await apiRequest('GET', `/transactions/${txId}`);
+        const txData = txResp.data;
+        
+        // Get wallet to check chain type
+        const walletResp = await apiRequest('GET', `/wallets/${txData.wallet_id}`);
+        const wallet = walletResp.data;
+        const chainType = wallet.chain_type;
+
+        log('info', `Executing ${chainType} transaction...`);
+
+        if (chainType === 'BTC') {
+          // BTC: Backend broadcasts via Electrum
+          log('info', 'Broadcasting BTC transaction via backend...');
+          
+          const broadcastResp = await apiRequest('POST', `/transactions/${txId}/btc-broadcast`);
+          const result = broadcastResp.data;
+          
+          log('success', `BTC Transaction broadcast!`, result);
+          
+          document.getElementById('signResult').style.display = 'block';
+          document.getElementById('signResult').textContent = JSON.stringify({
+            txid: result.txid,
+            tx_hash: result.tx_hash,
+            status: result.status,
+            explorer_url: result.explorer_url,
+          }, null, 2);
+          
+          if (result.explorer_url) {
+            log('info', `View on explorer: ${result.explorer_url}`);
+          }
+        } else if (chainType === 'EVM') {
+          // EVM: Frontend executes via connected wallet (MetaMask, WalletConnect, or Ledger)
+          if (!currentProvider) {
+            log('warning', 'Please connect a wallet first (MetaMask, WalletConnect, or Ledger)');
+            return;
+          }
+
+          const supportedWallets = ['MetaMask', 'WalletConnect', 'Ledger'];
+          if (!supportedWallets.includes(connectedWalletType)) {
+            log('warning', `Wallet type ${connectedWalletType} not supported for EVM execution. Use MetaMask, WalletConnect, or Ledger.`);
+            return;
+          }
+
+          // 1. Get execution data from backend
+          log('info', 'Fetching execution data...');
+          const execResp = await apiRequest('GET', `/transactions/${txId}/execution`);
+          const execData = execResp.data;
+
+          log('info', `Got execution data for Safe ${execData.safe_address}`, execData);
+
+          // 2. Check if we have enough signatures
+          if (execData.signatures_count === 0) {
+            log('warning', 'No signatures found. Please sign the transaction first.');
+            return;
+          }
+
+          // 3. Get provider for sending transaction
+          const account = accounts[0];
+          let provider;
+          
+          if (connectedWalletType === 'MetaMask') {
+            provider = window.ethereum;
+          } else if (connectedWalletType === 'WalletConnect') {
+            provider = currentProvider.provider;  // Access underlying WC provider
+          } else if (connectedWalletType === 'Ledger') {
+            // For Ledger, we need to use a web3 provider connected to the network
+            // and sign with the Ledger device
+            log('warning', 'Ledger EVM execution requires additional setup - using injected provider if available');
+            provider = window.ethereum;
+            if (!provider) {
+              log('error', 'No injected provider found. Please use MetaMask or WalletConnect for EVM execution with Ledger.');
+              return;
+            }
+          }
+
+          // 4. Estimate gas first to check if transaction will succeed
+          let estimatedGas;
+          try {
+            estimatedGas = await provider.request({
+              method: 'eth_estimateGas',
+              params: [{
+                from: account.address,
+                to: execData.safe_address,
+                data: execData.exec_transaction_data,
+                value: '0x0',
+              }],
+            });
+            log('info', `Gas estimated: ${parseInt(estimatedGas, 16)}`);
+          } catch (estimateErr) {
+            log('error', 'Gas estimation failed - transaction will likely revert', estimateErr.message);
+            log('warning', 'Common causes: insufficient token balance, invalid signatures, or contract state mismatch');
+            throw new Error(`Gas estimation failed: ${estimateErr.message}`);
+          }
+
+          // 5. Send transaction via connected provider
+          const tx = {
+            from: account.address,
+            to: execData.safe_address,
+            data: execData.exec_transaction_data,
+            value: '0x0',  // execTransaction doesn't require ETH
+            gas: '0x' + Math.min(parseInt(estimatedGas, 16) * 1.2, 10000000).toString(16).replace(/\..*/, ''),
+          };
+
+          log('info', `Requesting transaction via ${connectedWalletType}...`, tx);
+
+          const txHash = await provider.request({
+            method: 'eth_sendTransaction',
+            params: [tx],
+          });
+
+          log('success', `Transaction sent: ${txHash}`);
+
+          // 6. Wait for confirmation
+          log('info', 'Waiting for confirmation...');
+          let receipt = null;
+          let attempts = 0;
+          while (!receipt && attempts < 60) {
+            await new Promise(r => setTimeout(r, 2000));
+            try {
+              receipt = await provider.request({
+                method: 'eth_getTransactionReceipt',
+                params: [txHash],
+              });
+            } catch (e) {}
+            attempts++;
+          }
+
+          if (receipt && receipt.status === '0x1') {
+            log('success', 'Transaction confirmed!', receipt);
+
+            // 5. Call broadcast API to update backend state
+            const broadcastResp = await apiRequest('POST', `/transactions/${txId}/broadcast?tx_hash=${txHash}`);
+            log('success', 'Transaction status updated to BROADCAST', broadcastResp);
+
+            document.getElementById('signResult').style.display = 'block';
+            document.getElementById('signResult').textContent = JSON.stringify({
+              tx_hash: txHash,
+              status: 'BROADCAST',
+              receipt: receipt,
+            }, null, 2);
+          } else if (receipt && receipt.status === '0x0') {
+            log('error', 'Transaction failed (reverted)', receipt);
+          } else {
+            log('warning', 'Transaction pending - check explorer for status');
+            // Still update backend
+            await apiRequest('POST', `/transactions/${txId}/broadcast?tx_hash=${txHash}`);
+          }
+        } else {
+          log('error', `Unsupported chain type: ${chainType}`);
+        }
+      } catch (err) {
+        log('error', 'Execute transaction failed', err.message);
+      }
+    };
+
+    window.listTransactions = async function() {
+      const walletId = document.getElementById('txListWalletId').value;
+
+      try {
+        const path = walletId ? `/wallets/${walletId}/transactions` : '/transactions';
+        const data = await apiRequest('GET', path);
+        const container = document.getElementById('txListContainer');
+        const items = data.data || [];
+
+        if (items.length === 0) {
+          container.innerHTML = '<div class="empty-state">暂无交易</div>';
+          return;
+        }
+
+        container.innerHTML = `
+          <table class="data-table">
+            <thead><tr><th>ID</th><th>Type</th><th>Amount</th><th>Status</th><th>Sigs</th></tr></thead>
+            <tbody>
+              ${items.map(t => `
+                <tr onclick="document.getElementById('signTxId').value='${t.id}'" style="cursor:pointer;">
+                  <td class="mono">${t.id.slice(0, 8)}...</td>
+                  <td>${t.tx_type || t.type || '-'}</td>
+                  <td>${t.amount || '-'}</td>
+                  <td class="${t.status === 'CONFIRMED' ? 'text-success' : t.status === 'FAILED' ? 'text-danger' : ''}">${t.status}</td>
+                  <td>${t.signature_count || 0}/${t.threshold || '?'}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      } catch (err) {
+        // logged
+      }
+    };
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Message Signing
+    // ═══════════════════════════════════════════════════════════════════════
+    window.signPersonalMessage = async function() {
+      if (!currentProvider) {
+        log('warning', 'Please connect a wallet first');
+        return;
+      }
+
+      const message = document.getElementById('signMessage').value;
+      try {
+        log('info', 'Signing message...', { message });
+        const result = await currentProvider.signMessage(message, accounts[0]);
+        
+        document.getElementById('messageSignResult').style.display = 'block';
+        document.getElementById('messageSignResult').textContent = JSON.stringify(result, null, 2);
+        
+        log('success', 'Message signed', result);
+      } catch (err) {
+        log('error', 'Sign failed', err.message);
+      }
+    };
+
+    window.signTypedData = async function() {
+      if (!currentProvider) {
+        log('warning', 'Please connect a wallet first');
+        return;
+      }
+
+      // Example EIP-712 typed data
+      const typedData = {
+        types: {
+          EIP712Domain: [
+            { name: 'name', type: 'string' },
+            { name: 'version', type: 'string' },
+            { name: 'chainId', type: 'uint256' },
+          ],
+          Message: [
+            { name: 'content', type: 'string' },
+            { name: 'timestamp', type: 'uint256' },
+          ],
+        },
+        primaryType: 'Message',
+        domain: {
+          name: 'MultiVault Test',
+          version: '1',
+          chainId: 1,
+        },
+        message: {
+          content: document.getElementById('signMessage').value,
+          timestamp: Math.floor(Date.now() / 1000),
+        },
+      };
+
+      try {
+        log('info', 'Signing EIP-712 typed data...', typedData);
+        // Use signTransaction with EVM payload for EIP-712 signing
+        const payload = {
+          type: 'evm',
+          typedData: typedData,
+        };
+        const result = await currentProvider.signTransaction(payload, accounts[0]);
+        
+        document.getElementById('messageSignResult').style.display = 'block';
+        document.getElementById('messageSignResult').textContent = JSON.stringify(result, null, 2);
+        
+        log('success', 'Typed data signed', result);
+      } catch (err) {
+        log('error', 'Sign failed', err.message);
+      }
+    };
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Tab switching
+    // ═══════════════════════════════════════════════════════════════════════
+    window.switchTab = function(btn, contentId) {
+      const section = btn.closest('.section-body');
+      section.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      section.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+      btn.classList.add('active');
+      document.getElementById(contentId).style.display = 'block';
+    };
+
+    // Main tab switching (top-level panels)
+    window.switchMainTab = function(panelName) {
+      // Update tab buttons
+      document.querySelectorAll('.main-tab').forEach(t => t.classList.remove('active'));
+      document.querySelector(`.main-tab[onclick="switchMainTab('${panelName}')"]`).classList.add('active');
+
+      // Show/hide panels
+      document.querySelectorAll('.main-panel').forEach(p => p.classList.remove('active'));
+      document.getElementById(`${panelName}-panel`).classList.add('active');
+    };
+
+    // Update wallet connection status indicator on tab
+    function updateWalletTabStatus() {
+      const tabStatus = document.getElementById('wallet-tab-status');
+      if (connectedWalletType && accounts.length > 0) {
+        tabStatus.classList.add('connected');
+      } else {
+        tabStatus.classList.remove('connected');
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Init
+    // ═══════════════════════════════════════════════════════════════════════
+    log('info', 'Debugger initialized');
+    checkBackendHealth();
+  </script>
+</body>
+</html>

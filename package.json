@@ -1,0 +1,49 @@
+{
+  "name": "multivault",
+  "version": "0.1.6",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@9.15.9",
+  "description": "Non-custodial multi-signature wallet management system",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/multivault/multivault.git"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9",
+    "python": ">=3.12"
+  },
+  "scripts": {
+    "bootstrap": "bash scripts/bootstrap.sh",
+    "install:backend": "cd apps/backend && poetry install",
+    "dev": "bash scripts/dev.sh",
+    "dev:frontend": "pnpm --filter @multivault/frontend dev",
+    "dev:backend": "MULTIVAULT_HOST=127.0.0.1 MULTIVAULT_PORT=8000 bash apps/backend/scripts/dev-backend.sh",
+    "build": "pnpm build:sdk && pnpm build:frontend",
+    "build:frontend": "pnpm --filter @multivault/frontend build",
+    "build:sdk": "pnpm --filter @multivault/wallet-connector build",
+    "test": "pnpm test:sdk && pnpm test:backend",
+    "test:frontend": "echo 'Frontend tests not yet implemented'",
+    "test:sdk": "pnpm --filter @multivault/wallet-connector test run",
+    "test:backend": "cd apps/backend && poetry run pytest",
+    "lint": "pnpm --filter @multivault/frontend lint && pnpm --filter @multivault/wallet-connector lint",
+    "typecheck": "pnpm --filter @multivault/frontend typecheck && pnpm --filter @multivault/wallet-connector typecheck",
+    "format": "pnpm --filter @multivault/frontend lint --fix && pnpm --filter @multivault/wallet-connector lint --fix && cd apps/backend && poetry run black .",
+    "docker:up": "bash scripts/docker-up.sh",
+    "docker:down": "bash scripts/docker-down.sh",
+    "docker:build": "docker compose build",
+    "docker:logs": "docker compose logs -f",
+    "clean": "pnpm --filter @multivault/frontend clean && pnpm --filter @multivault/wallet-connector clean && rm -rf apps/backend/dist apps/backend/.pytest_cache",
+    "clean:all": "pnpm clean && rm -rf node_modules apps/*/node_modules packages/*/node_modules apps/backend/.venv",
+    "postinstall": "pnpm build:sdk"
+  },
+  "workspaces": [
+    "apps/frontend",
+    "packages/wallet-connector"
+  ],
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

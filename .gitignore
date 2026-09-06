@@ -1,0 +1,76 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.github/copilot-instructions.md
+.github/prompts/
+.idea/
+.agent/
+*.swp
+*.swo
+*~
+
+# Private configuration
+AGENTS.md
+docs/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+.cache/
+
+# Build outputs
+dist/
+build/
+out/
+
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.tox/
+.venv/
+venv/
+ENV/
+
+# Data & databases
+*.db
+*.sqlite
+*.sqlite3
+data/
+
+# Backup files
+*.bak
+*.backup
+
+# Deprecated/archived
+tasks/
+.archive/
+.worktrees/
+.superpowers
+
+# KeyVault RSA keys
+keys/
+*.pem
