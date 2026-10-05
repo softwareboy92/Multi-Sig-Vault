@@ -1,4 +1,4 @@
-"""Price data service — DeFiLlama integration with in-memory cache."""
+"""Selectable market-price integrations with a shared in-memory cache."""
 
 from __future__ import annotations
 
@@ -34,6 +34,12 @@ TESTNET_CHAIN_IDS: set[int] = {
 
 DEFILLAMA_BASE_URL = "https://coins.llama.fi/prices/current"
 DEFAULT_CACHE_TTL = 180  # 3 minutes
+PROVIDER_URLS = {
+    "okx": "https://www.okx.com/api/v5/market/ticker",
+    "binance": "https://api.binance.com/api/v3/ticker/price",
+    "coinmarketcap": "https://pro-api.coinmarketcap.com/public-api/v2/simple/price",
+    "gateio": "https://api.gateio.ws/api/v4/spot/tickers",
+}
 
 
 class PriceService:
@@ -105,6 +111,7 @@ class PriceService:
     async def fetch_prices(
         self,
         assets: list[Any],
+        provider: str = "defillama",
     ) -> tuple[dict[str, dict[str, Any]], bool]:
         """Fetch prices for a list of AssetPriceRequest.
 
@@ -118,6 +125,9 @@ class PriceService:
         3. Batch-fetch remaining from DeFiLlama
         4. On error → fallback to stale cache (mark stale=True)
         """
+        if provider != "defillama":
+            return await self._fetch_exchange_prices(assets, provider)
+
         result: dict[str, dict[str, Any]] = {}
         to_fetch: list[tuple[str, Any]] = []  # (coin_key, asset)
         is_stale = False
@@ -172,3 +182,81 @@ class PriceService:
                     is_stale = True
 
         return result, is_stale
+
+    async def _fetch_exchange_prices(
+        self, assets: list[Any], provider: str
+    ) -> tuple[dict[str, dict[str, Any]], bool]:
+        """Fetch symbol/USDT quotes from the selectable services used by NXV Observation."""
+        symbols = list(dict.fromkeys(a.symbol.strip().upper() for a in assets if a.symbol.strip()))
+        result: dict[str, dict[str, Any]] = {}
+        missing: list[str] = []
+        for symbol in symbols:
+            key = f"{provider}:{symbol}"
+            cached = self._cache_get(key)
+            if cached is not None:
+                result[symbol] = cached
+            else:
+                missing.append(symbol)
+        if not missing:
+            return result, False
+
+        now = int(time.time())
+        try:
+            async with httpx.AsyncClient(timeout=8.0) as client:
+                if provider == "gateio":
+                    response = await client.get(PROVIDER_URLS[provider])
+                    response.raise_for_status()
+                    tickers = response.json()
+                    by_symbol = {
+                        row["currency_pair"][:-5]: row.get("last")
+                        for row in tickers
+                        if isinstance(row, dict)
+                        and isinstance(row.get("currency_pair"), str)
+                        and row["currency_pair"].endswith("_USDT")
+                    }
+                    raw_prices = {symbol: by_symbol.get(symbol) for symbol in missing}
+                elif provider == "coinmarketcap":
+                    response = await client.get(
+                        PROVIDER_URLS[provider],
+                        params={"symbol": ",".join(s for s in missing if s != "USDT"), "convert": "USDT"},
+                        headers={"Accept": "application/json"},
+                    )
+                    response.raise_for_status()
+                    body = response.json()
+                    raw_prices = {}
+                    for item in body.get("data", []):
+                        quote = next((q for q in item.get("quotes", []) if q.get("symbol") == "USDT"), None)
+                        if quote:
+                            raw_prices[str(item.get("symbol", "")).upper()] = quote.get("price")
+                else:
+                    raw_prices = {}
+                    for symbol in missing:
+                        if symbol == "USDT":
+                            raw_prices[symbol] = 1
+                            continue
+                        try:
+                            params = {"instId": f"{symbol}-USDT"} if provider == "okx" else {"symbol": f"{symbol}USDT"}
+                            response = await client.get(PROVIDER_URLS[provider], params=params)
+                            response.raise_for_status()
+                            body = response.json()
+                            raw_prices[symbol] = body.get("data", [{}])[0].get("last") if provider == "okx" else body.get("price")
+                        except Exception as exc:
+                            logger.info("price_symbol_unavailable", provider=provider, symbol=symbol, error=str(exc))
+
+            raw_prices["USDT"] = 1
+            for symbol, raw in raw_prices.items():
+                if raw is None or float(raw) <= 0:
+                    continue
+                entry = {"usd": float(raw), "confidence": None, "updated_at": now}
+                self._cache_set(f"{provider}:{symbol}", entry)
+                result[symbol] = entry
+            return result, False
+        except Exception as exc:
+            logger.warning("price_provider_fetch_failed", provider=provider, error=str(exc))
+            stale = False
+            for symbol in missing:
+                entry = self._cache_get(f"{provider}:{symbol}", allow_stale=True)
+                if entry is not None:
+                    result[symbol] = entry
+                    stale = True
+            return result, stale

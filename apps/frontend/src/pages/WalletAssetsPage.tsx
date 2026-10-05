@@ -19,9 +19,13 @@ import {
 import { useTranslation } from "../hooks/useTranslation";
 import { useToastStore } from "../stores/useToastStore";
 import { useAdaptivePageSize } from "../hooks/useAdaptivePageSize";
-import { getWallet, getWalletAssets, syncWalletAssets } from "../api";
+import { getNetworks, getWallet, getWalletAssets, syncWalletAssets } from "../api";
 import { formatBalance } from "../utils/format";
 import type { Asset, Wallet } from "../types";
+import { useAssetPrices } from "../hooks/useAssetPrices";
+import { atomicToNumber, formatUsd } from "../utils/price";
+import { formatAbsoluteTime } from "../utils/time";
+import { useTimezone } from "../hooks/useTimezone";
 
 // ---------------------------------------------------------------------------
 // Component
@@ -30,7 +34,8 @@ import type { Asset, Wallet } from "../types";
 export const WalletAssetsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
+  const timeZone = useTimezone();
   const { showToast, removeToast } = useToastStore();
 
   // --- Data state ---
@@ -41,6 +46,7 @@ export const WalletAssetsPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [searchText, setSearchText] = useState("");
+  const [chainId, setChainId] = useState<number | null>(null);
 
   // --- Pagination ---
   const [currentPage, setCurrentPage] = useState(1);
@@ -64,6 +70,12 @@ export const WalletAssetsPage: React.FC = () => {
         ]);
         setWallet(walletData);
         setAssets(assetsData);
+        if (walletData.chain_type === "EVM") {
+          const networks = await getNetworks("EVM");
+          setChainId(networks.find((network) => network.id === walletData.network_id)?.chain_id ?? null);
+        } else {
+          setChainId(null);
+        }
         if (isRefresh) setError(null);
       } catch (err) {
         const message = err instanceof Error ? err.message : t("wallet.loadFailed");
@@ -137,6 +149,19 @@ export const WalletAssetsPage: React.FC = () => {
   const hasAssets = assets.length > 0;
   const hasFilteredData = currentPageData.length > 0;
   const isFilterEmpty = hasAssets && !hasFilteredData;
+  const priceRequests = useMemo(() => assets.map((asset) => ({
+    chain_type: wallet?.chain_type ?? "EVM",
+    chain_id: chainId,
+    token_address: asset.token_address,
+    symbol: asset.symbol,
+  })), [assets, wallet?.chain_type, chainId]);
+  const { prices, provider } = useAssetPrices(priceRequests);
+  const assetSyncedAt = useMemo(() => assets.map((asset) => asset.last_synced_at).filter((value): value is string => Boolean(value)).sort().at(-1) ?? null, [assets]);
+  const priceUpdatedAt = useMemo(() => {
+    const latest = Object.values(prices).map((price) => price.updated_at).filter((value): value is string => Boolean(value)).sort().at(-1);
+    if (!latest) return null;
+    return /^\d+$/.test(latest) ? new Date(Number(latest) * 1000) : latest;
+  }, [prices]);
 
   // ---------------------------------------------------------------------------
   // Loading skeleton
@@ -262,6 +287,11 @@ export const WalletAssetsPage: React.FC = () => {
         }
       />
 
+      <div className="-mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[var(--muted)]">
+        <span>{t("wallet.assetSyncedAt")}: {assetSyncedAt ? formatAbsoluteTime(assetSyncedAt, language, timeZone) : t("wallet.neverSynced")}</span>
+        <span>{t("wallet.priceUpdatedAt")}: {priceUpdatedAt ? formatAbsoluteTime(priceUpdatedAt, language, timeZone) : t("wallet.neverSynced")} ({provider === "defillama" ? "DeFiLlama" : provider === "gateio" ? "Gate.io" : provider === "coinmarketcap" ? "CoinMarketCap" : provider.toUpperCase()})</span>
+      </div>
+
       {/* No assets at all */}
       {!hasAssets && (
         <Card>
@@ -285,13 +315,16 @@ export const WalletAssetsPage: React.FC = () => {
           <Table className="table-fixed">
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[60%]">{t("common.asset")}</TableHead>
-                <TableHead align="right" className="w-[40%]">{t("wallet.balance")}</TableHead>
+                <TableHead className="w-[34%]">{t("common.asset")}</TableHead>
+                <TableHead align="right" className="w-[26%]">{t("wallet.unitPrice")}</TableHead>
+                <TableHead align="right" className="w-[40%]">{t("wallet.balanceAndValue")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {currentPageData.map((asset) => {
                 const displayBalance = formatBalance(asset.balance, asset.decimals, 8);
+                const price = prices[asset.symbol.toUpperCase()]?.usd;
+                const fiatValue = price == null ? null : atomicToNumber(asset.balance, asset.decimals) * price;
 
                 return (
                   <TableRow
@@ -304,11 +337,16 @@ export const WalletAssetsPage: React.FC = () => {
                       </span>
                     </TableCell>
 
+                    <TableCell align="right">
+                      <span className="font-mono tabular-nums">{price == null ? "—" : formatUsd(price, language)}</span>
+                    </TableCell>
+
                     {/* Balance */}
                     <TableCell align="right">
-                      <span className="font-mono">
-                        {displayBalance}
-                      </span>
+                      <div className="flex flex-col items-end gap-0.5">
+                        <span className="font-mono">{displayBalance} {asset.symbol}</span>
+                        <span className="text-xs tabular-nums text-[var(--muted)]">{fiatValue == null ? "—" : `≈ ${formatUsd(fiatValue, language)}`}</span>
+                      </div>
                     </TableCell>
 
                   </TableRow>

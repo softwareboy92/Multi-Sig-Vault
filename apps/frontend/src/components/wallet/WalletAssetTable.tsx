@@ -1,4 +1,4 @@
-import React, { memo, useState } from "react";
+import React, { memo, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Button,
@@ -18,6 +18,10 @@ import { useToastStore } from "@/stores/useToastStore";
 import { isValidEvmAddress } from "@/utils/address";
 import { formatBalance } from "@/utils/format";
 import type { Asset, Wallet } from "@/types";
+import { useAssetPrices } from "@/hooks/useAssetPrices";
+import { atomicToNumber, formatUsd } from "@/utils/price";
+import { formatAbsoluteTime } from "@/utils/time";
+import { useTimezone } from "@/hooks/useTimezone";
 
 // ---------------------------------------------------------------------------
 // Row component (memoized)
@@ -25,12 +29,17 @@ import type { Asset, Wallet } from "@/types";
 
 interface WalletAssetRowProps {
   asset: Asset;
+  price?: number;
+  language: string;
 }
 
 const WalletAssetRow = memo(function WalletAssetRow({
   asset,
+  price,
+  language,
 }: WalletAssetRowProps) {
   const displayBalance = formatBalance(asset.balance, asset.decimals, 8);
+  const fiatValue = price == null ? null : atomicToNumber(asset.balance, asset.decimals) * price;
 
   return (
     <TableRow>
@@ -39,9 +48,20 @@ const WalletAssetRow = memo(function WalletAssetRow({
         <span className="font-semibold">{asset.symbol}</span>
       </TableCell>
 
+      <TableCell align="right">
+        <span className="font-mono tabular-nums">
+          {price == null ? "—" : formatUsd(price, language)}
+        </span>
+      </TableCell>
+
       {/* Balance */}
       <TableCell align="right">
-        <span className="font-mono">{displayBalance}</span>
+        <div className="flex flex-col items-end gap-0.5">
+          <span className="font-mono">{displayBalance} {asset.symbol}</span>
+          <span className="text-xs tabular-nums text-[var(--muted)]">
+            {fiatValue == null ? "—" : `≈ ${formatUsd(fiatValue, language)}`}
+          </span>
+        </div>
       </TableCell>
 
     </TableRow>
@@ -60,6 +80,7 @@ interface WalletAssetTableProps {
   onSync: () => void;
   onImportToken: (contractAddress: string) => Promise<void>;
   maxDisplay?: number;
+  chainId?: number | null;
 }
 
 /**
@@ -74,8 +95,10 @@ export const WalletAssetTable: React.FC<WalletAssetTableProps> = ({
   onSync,
   onImportToken,
   maxDisplay = 10,
+  chainId = null,
 }) => {
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
+  const timeZone = useTimezone();
   const { showToast } = useToastStore();
   const navigate = useNavigate();
 
@@ -85,6 +108,23 @@ export const WalletAssetTable: React.FC<WalletAssetTableProps> = ({
 
   const displayAssets = assets.slice(0, maxDisplay);
   const showViewAll = assets.length > maxDisplay;
+  const priceRequests = useMemo(() => assets.map((asset) => ({
+    chain_type: wallet.chain_type,
+    chain_id: chainId,
+    token_address: asset.token_address,
+    symbol: asset.symbol,
+  })), [assets, wallet.chain_type, chainId]);
+  const { prices, provider } = useAssetPrices(priceRequests);
+  const assetSyncedAt = useMemo(() => {
+    const timestamps = assets.map((asset) => asset.last_synced_at).filter((value): value is string => Boolean(value));
+    return timestamps.sort().at(-1) ?? null;
+  }, [assets]);
+  const priceUpdatedAt = useMemo(() => {
+    const timestamps = Object.values(prices).map((price) => price.updated_at).filter((value): value is string => Boolean(value));
+    const latest = timestamps.sort().at(-1);
+    if (!latest) return null;
+    return /^\d+$/.test(latest) ? new Date(Number(latest) * 1000) : latest;
+  }, [prices]);
 
   const handleImport = async () => {
     if (!tokenAddress.trim()) {
@@ -114,7 +154,13 @@ export const WalletAssetTable: React.FC<WalletAssetTableProps> = ({
       <Card>
         {/* Toolbar */}
         <div className="flex items-center justify-between mb-4 min-h-[44px] gap-3">
-          <h3 className="text-lg font-extrabold">{t("wallet.assets")}</h3>
+          <div className="min-w-0">
+            <h3 className="text-lg font-extrabold">{t("wallet.assets")}</h3>
+            <p className="mt-1 text-xs leading-5 text-[var(--muted)]">
+              {t("wallet.assetSyncedAt")}: {assetSyncedAt ? formatAbsoluteTime(assetSyncedAt, language, timeZone) : t("wallet.neverSynced")}
+              {" · "}{t("wallet.priceUpdatedAt")}: {priceUpdatedAt ? formatAbsoluteTime(priceUpdatedAt, language, timeZone) : t("wallet.neverSynced")} ({provider === "defillama" ? "DeFiLlama" : provider === "gateio" ? "Gate.io" : provider === "coinmarketcap" ? "CoinMarketCap" : provider.toUpperCase()})
+            </p>
+          </div>
           <div className="flex items-center gap-3">
             {wallet.chain_type === "EVM" && (
               <Button
@@ -157,8 +203,9 @@ export const WalletAssetTable: React.FC<WalletAssetTableProps> = ({
           <Table className="table-fixed">
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[60%]">{t("common.asset")}</TableHead>
-                <TableHead align="right" className="w-[40%]">{t("wallet.balance")}</TableHead>
+                <TableHead className="w-[34%]">{t("common.asset")}</TableHead>
+                <TableHead align="right" className="w-[26%]">{t("wallet.unitPrice")}</TableHead>
+                <TableHead align="right" className="w-[40%]">{t("wallet.balanceAndValue")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -166,6 +213,8 @@ export const WalletAssetTable: React.FC<WalletAssetTableProps> = ({
                 <WalletAssetRow
                   key={`${asset.id}-${asset.token_address || asset.symbol}`}
                   asset={asset}
+                  price={prices[asset.symbol.toUpperCase()]?.usd}
+                  language={language}
                 />
               ))}
             </TableBody>

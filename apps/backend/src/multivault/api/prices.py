@@ -18,10 +18,10 @@ _price_service = PriceService(cache_ttl_seconds=_settings.price_cache_ttl_second
 async def batch_prices(body: BatchPriceRequest) -> ApiResponse[BatchPriceResponse]:
     """Fetch current USD prices for a batch of assets.
 
-    Uses DeFiLlama as data source with 3-minute in-memory cache.
+    Uses the selected market-data provider with a short in-memory cache.
     Testnet assets are skipped (no market price).
     """
-    raw, is_stale = await _price_service.fetch_prices(body.assets)
+    raw, is_stale = await _price_service.fetch_prices(body.assets, provider=body.provider)
 
     prices = {
         symbol: PriceInfo(
@@ -37,5 +37,6 @@ async def batch_prices(body: BatchPriceRequest) -> ApiResponse[BatchPriceRespons
             prices=prices,
             currency="USD",
             stale=is_stale,
+            provider=body.provider,
         )
     )

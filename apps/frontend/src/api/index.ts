@@ -8,3 +8,4 @@ export * from './pending';
 export * from './backup';
 export * from './keyvault';
 export * from './simulation';
+export * from './prices';

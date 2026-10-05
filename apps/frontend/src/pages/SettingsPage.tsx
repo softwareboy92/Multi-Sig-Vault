@@ -70,6 +70,8 @@ export const SettingsPage: React.FC = () => {
     setTimezone,
     uiScalePercent,
     setUiScalePercent,
+    priceProvider,
+    setPriceProvider,
   } = usePreferenceStore();
 
   const resetAllGuides = useGuideStore((s) => s.resetAll);
@@ -88,6 +90,7 @@ export const SettingsPage: React.FC = () => {
   const [securityModalOpen, setSecurityModalOpen] = useState(false);
   const [simulationConfig, setSimulationConfig] = useState<SimulationConfig | null>(null);
   const [securityLoading, setSecurityLoading] = useState(false);
+  const [draftUiScalePercent, setDraftUiScalePercent] = useState(uiScalePercent);
   const [securityForm, setSecurityForm] = useState({
     enabled: true,
     access_key: "",
@@ -96,6 +99,12 @@ export const SettingsPage: React.FC = () => {
   });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setDraftUiScalePercent(uiScalePercent);
+  }, [uiScalePercent]);
+
+  const commitUiScale = () => setUiScalePercent(draftUiScalePercent);
 
   useEffect(() => {
     void getSimulationConfig()
@@ -324,6 +333,25 @@ export const SettingsPage: React.FC = () => {
               />
             </div>
 
+            <div className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="text-sm font-bold">{t("settings.priceService")}</div>
+                <div className="text-xs text-[var(--muted)]">{t("settings.priceServiceDesc")}</div>
+              </div>
+              <SelectMenu
+                value={priceProvider}
+                onChange={(value) => setPriceProvider(value as typeof priceProvider)}
+                options={[
+                  { value: "defillama", label: "DeFiLlama" },
+                  { value: "okx", label: "OKX" },
+                  { value: "binance", label: "Binance" },
+                  { value: "coinmarketcap", label: "CoinMarketCap" },
+                  { value: "gateio", label: "Gate.io" },
+                ]}
+                className="min-w-[190px]"
+              />
+            </div>
+
             <div className="flex flex-col gap-4 py-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="min-w-0">
                 <div className="text-sm font-bold">{t("settings.interfaceScale")}</div>
@@ -331,7 +359,7 @@ export const SettingsPage: React.FC = () => {
               </div>
               <div className="flex min-w-0 flex-wrap items-center gap-3 lg:justify-end">
                 <span className="min-w-12 rounded-full bg-[var(--row-head-bg)] px-2.5 py-1 text-center text-sm font-bold tabular-nums text-[var(--text)]">
-                  {uiScalePercent}%
+                  {draftUiScalePercent}%
                 </span>
                 <div className="flex min-w-0 flex-col gap-1">
                   <input
@@ -339,16 +367,17 @@ export const SettingsPage: React.FC = () => {
                     min={80}
                     max={125}
                     step={5}
-                    value={uiScalePercent}
-                    onChange={(event) =>
-                      setUiScalePercent(Number(event.target.value))
-                    }
+                    value={draftUiScalePercent}
+                    onChange={(event) => setDraftUiScalePercent(Number(event.target.value))}
                     className="ui-scale-slider max-w-full"
                     aria-label={t("settings.interfaceScale")}
-                    aria-valuetext={`${uiScalePercent}%`}
+                    aria-valuetext={`${draftUiScalePercent}%`}
+                    onPointerUp={commitUiScale}
+                    onPointerCancel={() => setDraftUiScalePercent(uiScalePercent)}
+                    onBlur={commitUiScale}
                     style={
                       {
-                        "--ui-scale-progress": `${((uiScalePercent - 80) / 45) * 100}%`,
+                        "--ui-scale-progress": `${((draftUiScalePercent - 80) / 45) * 100}%`,
                       } as React.CSSProperties
                     }
                   />
@@ -360,8 +389,11 @@ export const SettingsPage: React.FC = () => {
                 <Button
                   variant="ghost"
                   className="px-3 py-2"
-                  onClick={() => setUiScalePercent(100)}
-                  disabled={uiScalePercent === 100}
+                  onClick={() => {
+                    setDraftUiScalePercent(100);
+                    setUiScalePercent(100);
+                  }}
+                  disabled={draftUiScalePercent === 100}
                 >
                   {t("settings.resetInterfaceScale")}
                 </Button>

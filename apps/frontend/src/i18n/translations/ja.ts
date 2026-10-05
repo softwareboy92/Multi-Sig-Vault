@@ -28,10 +28,14 @@ export const ja = {
   status: { all: "すべて", pendingSign: "署名待ち", pendingBroadcast: "配信待ち", completed: "完了" },
   allChains: "すべてのチェーン", allStatus: "すべての状態", processingStatus: "処理中",
   assets: {
+    pendingTransactions: "保留中の取引", confirmedSevenDays: "過去7日間の確認済み", transactionUnit: "件", estimatedValue: "評価額",
+    totalValue: "資産評価額", stalePrice: "キャッシュ価格",
     searchPlaceholder: "資産またはウォレットを検索", assetDetail: "資産詳細", totalBalance: "合計残高",
     holdingWallets: "保有ウォレット", noFilterResults: "一致する資産がありません",
   },
   wallet: {
+    totalAssetValue: "総資産評価額",
+    unitPrice: "価格", balanceAndValue: "残高 / 評価額", assetSyncedAt: "資産同期時刻", priceUpdatedAt: "価格更新時刻", neverSynced: "未同期",
     listTitle: "ウォレット", searchPlaceholder: "ウォレット名またはアドレスを検索",
     createWallet: "ウォレット作成", importExisting: "既存ウォレットをインポート", details: "ウォレット詳細",
     address: "アドレス", assets: "資産", transactions: "取引", send: "送信", receive: "受信",
@@ -105,6 +109,7 @@ export const ja = {
   },
   settings: {
     title: "設定", networkManagement: "ネットワーク管理", preferences: "環境設定",
+    priceService: "価格サービス", priceServiceDesc: "USD価格と資産評価に使用する市場データソースを選択します。",
     securitySettings: "セキュリティ設定", transactionSimulation: "取引シミュレーション",
     transactionSimulationDesc: "署名前にTenderlyでEVM取引の実行結果と資産変更を確認します。",
     configured: "設定済み", notConfigured: "未設定",

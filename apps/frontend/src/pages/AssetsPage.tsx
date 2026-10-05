@@ -38,6 +38,8 @@ import { getWallets, getWalletAssets, getNetworks, getWalletTransactions } from 
 import { formatBalance, sumBigIntBalances } from "../utils/format";
 import { getWalletChainLabel, isWalletTestnet } from "../utils/wallet";
 import type { Asset, Transaction, Wallet } from "../types";
+import { useAssetPrices } from "../hooks/useAssetPrices";
+import { atomicToNumber, formatUsd } from "../utils/price";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -49,6 +51,7 @@ interface AssetWithWallet extends Asset {
   wallet_chain_label: string;
   wallet_chain_type: "BTC" | "EVM";
   wallet_is_testnet: boolean;
+  chain_id: number | null;
 }
 
 /** One row in the aggregated asset table. */
@@ -63,12 +66,7 @@ interface AggregatedAsset {
   total_balance: string;
   wallet_count: number;
   all_testnet: boolean;
-}
-
-interface WalletAssetDistribution {
-  wallet: Wallet;
-  chainLabel: string;
-  assets: AssetWithWallet[];
+  chain_id: number | null;
 }
 
 interface DashboardTransaction extends Transaction {
@@ -108,7 +106,7 @@ function buildGroupKey(
 
 const DashboardMetric: React.FC<{
   label: string;
-  value: number;
+  value: number | string;
   unit: string;
   tone: "all" | "btc" | "evm" | "asset";
 }> = ({ label, value, unit, tone }) => {
@@ -199,9 +197,9 @@ export const DashboardPage: React.FC = () => {
           ...remainingWalletPages.flatMap((page) => page.items),
         ];
 
-        const evmMap = new Map<string, { name: string; is_testnet: boolean }>();
+        const evmMap = new Map<string, { name: string; is_testnet: boolean; chain_id: number | null }>();
         const btcMap = new Map<string, { btc_network: string | undefined; is_testnet: boolean }>();
-        (evmNetworks || []).forEach((n) => evmMap.set(n.id, { name: n.name, is_testnet: n.is_testnet }));
+        (evmNetworks || []).forEach((n) => evmMap.set(n.id, { name: n.name, is_testnet: n.is_testnet, chain_id: n.chain_id ?? null }));
         (btcNetworks || []).forEach((n) =>
           btcMap.set(n.id, { btc_network: n.btc_network ?? undefined, is_testnet: n.is_testnet })
         );
@@ -231,6 +229,7 @@ export const DashboardPage: React.FC = () => {
                   wallet_chain_label: chainLabel,
                   wallet_chain_type: wallet.chain_type,
                   wallet_is_testnet: isTestnet,
+                  chain_id: wallet.chain_type === "EVM" ? evmMap.get(wallet.network_id)?.chain_id ?? null : null,
                 });
               });
             } catch {
@@ -314,6 +313,7 @@ export const DashboardPage: React.FC = () => {
           total_balance: "0",
           wallet_count: 0,
           all_testnet: true,
+          chain_id: a.chain_id,
           balances: [],
           walletIds: new Set(),
           hasMainnet: false,
@@ -342,6 +342,7 @@ export const DashboardPage: React.FC = () => {
         total_balance: sumBigIntBalances(v.balances),
         wallet_count: v.walletIds.size,
         all_testnet: !v.hasMainnet,
+        chain_id: v.chain_id,
       });
     }
 
@@ -355,48 +356,55 @@ export const DashboardPage: React.FC = () => {
     return result;
   }, [rawAssets]);
 
+  const priceRequests = useMemo(
+    () => aggregated.map((asset) => ({
+      chain_type: asset.chain_type,
+      chain_id: asset.chain_id,
+      token_address: asset.token_address,
+      symbol: asset.symbol,
+    })),
+    [aggregated],
+  );
+  const { prices, stale: pricesStale } = useAssetPrices(priceRequests);
+  const totalPortfolioValue = useMemo(
+    () => aggregated.reduce((total, asset) => {
+      const price = prices[asset.symbol.toUpperCase()]?.usd;
+      return total + (price ? atomicToNumber(asset.total_balance, asset.decimals) * price : 0);
+    }, 0),
+    [aggregated, prices],
+  );
+
   const walletStats = useMemo(
     () => ({
-      total: wallets.length,
-      btc: wallets.filter((wallet) => wallet.chain_type === "BTC").length,
-      evm: wallets.filter((wallet) => wallet.chain_type === "EVM").length,
+      active: wallets.filter((wallet) => wallet.status === "ACTIVE").length,
     }),
     [wallets],
   );
 
-  const walletDistribution = useMemo<WalletAssetDistribution[]>(() => {
-    const assetsByWallet = new Map<string, AssetWithWallet[]>();
-    rawAssets.forEach((asset) => {
-      const current = assetsByWallet.get(asset.wallet_id) || [];
-      current.push(asset);
-      assetsByWallet.set(asset.wallet_id, current);
-    });
-
-    return wallets
-      .map((wallet) => {
-        const assets = assetsByWallet.get(wallet.id) || [];
-        return {
-          wallet,
-          assets,
-          chainLabel: assets[0]?.wallet_chain_label || wallet.chain_type,
-        };
-      })
-      .sort((a, b) => {
-        if (a.assets.length !== b.assets.length) return b.assets.length - a.assets.length;
-        return a.wallet.name.localeCompare(b.wallet.name);
-      });
-  }, [rawAssets, wallets]);
-
   const assetDistributionData = useMemo(
     () =>
-      walletDistribution
-        .filter(({ assets }) => assets.length > 0)
-        .map(({ wallet, assets }) => ({
-          name: wallet.name,
-          value: assets.length,
-        })),
-    [walletDistribution],
+      aggregated
+        .map((asset) => ({
+          name: asset.symbol,
+          value: atomicToNumber(asset.total_balance, asset.decimals) * (prices[asset.symbol.toUpperCase()]?.usd ?? 0),
+        }))
+        .filter((asset) => asset.value > 0)
+        .sort((a, b) => b.value - a.value),
+    [aggregated, prices],
   );
+
+  const pendingTransactionCount = useMemo(
+    () => transactions.filter((transaction) => ["PENDING_SIGN", "PARTIALLY_SIGNED", "SIGNED", "PENDING_CONFIRMATION"].includes(transaction.status)).length,
+    [transactions],
+  );
+  const confirmedSevenDayCount = useMemo(() => {
+    const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    return transactions.filter((transaction) => {
+      if (transaction.status !== "CONFIRMED") return false;
+      const timestamp = new Date(transaction.confirmed_at || transaction.created_at).getTime();
+      return Number.isFinite(timestamp) && timestamp >= cutoff;
+    }).length;
+  }, [transactions]);
 
   const sevenDayTransfers = useMemo(() => {
     const now = new Date();
@@ -577,23 +585,29 @@ export const DashboardPage: React.FC = () => {
         </span>
       }
     >
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <DashboardMetric
+          label={t("assets.totalValue")}
+          value={formatUsd(totalPortfolioValue, language)}
+          unit={pricesStale ? t("assets.stalePrice") : "USD"}
+          tone="asset"
+        />
         <DashboardMetric
           label={t("assets.totalWallets")}
-          value={walletStats.total}
+          value={walletStats.active}
           unit={t("assets.walletUnit")}
           tone="all"
         />
         <DashboardMetric
-          label={t("assets.btcWallets")}
-          value={walletStats.btc}
-          unit={t("assets.walletUnit")}
+          label={t("assets.pendingTransactions")}
+          value={pendingTransactionCount}
+          unit={t("assets.transactionUnit")}
           tone="btc"
         />
         <DashboardMetric
-          label={t("assets.evmWallets")}
-          value={walletStats.evm}
-          unit={t("assets.walletUnit")}
+          label={t("assets.confirmedSevenDays")}
+          value={confirmedSevenDayCount}
+          unit={t("assets.transactionUnit")}
           tone="evm"
         />
         <DashboardMetric
@@ -765,9 +779,15 @@ export const DashboardPage: React.FC = () => {
 
                     {/* Balance */}
                     <TableCell align="right">
-                      <span className="font-mono">
-                        {displayBalance}
-                      </span>
+                      <div className="flex flex-col items-end gap-0.5">
+                        <span className="font-mono">{displayBalance} {asset.symbol}</span>
+                        {prices[asset.symbol.toUpperCase()]?.usd != null && (
+                          <span className="text-xs tabular-nums text-[var(--muted)]">
+                            {formatUsd(atomicToNumber(asset.total_balance, asset.decimals) * prices[asset.symbol.toUpperCase()].usd, language)}
+                            {" · "}{formatUsd(prices[asset.symbol.toUpperCase()].usd, language)}/{asset.symbol}
+                          </span>
+                        )}
+                      </div>
                     </TableCell>
 
                   </TableRow>
@@ -817,8 +837,8 @@ export const DashboardPage: React.FC = () => {
                   </Pie>
                   <Tooltip
                     formatter={(value) => [
-                      t("assets.assetItems", { count: String(value) }),
-                      t("tableHeaders.wallet"),
+                      formatUsd(Number(value), language),
+                      t("assets.estimatedValue"),
                     ]}
                     contentStyle={{
                       background: "var(--panel)",

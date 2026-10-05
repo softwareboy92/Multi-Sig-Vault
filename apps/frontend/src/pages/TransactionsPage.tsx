@@ -30,6 +30,8 @@ import { formatAbsoluteTime } from "../utils/time";
 import { getExplorerUrl } from "../utils/formatters";
 import { TX_STATUS_VARIANT, TX_STATUS_DOT } from "../utils/status-variants";
 import type { Transaction, TransactionStatus, Wallet } from "../types";
+import { useAssetPrices } from "../hooks/useAssetPrices";
+import { atomicToNumber, formatUsd } from "../utils/price";
 
 // ---------------------------------------------------------------------------
 // Module-level constants
@@ -65,6 +67,22 @@ export const TransactionsPage: React.FC = () => {
   const [btcNetworks, setBtcNetworks] = useState<Map<string, string>>(new Map());
   const [networkExplorerUrl, setNetworkExplorerUrl] = useState<string | null>(null);
   const [networkChainId, setNetworkChainId] = useState<number | null>(null);
+
+  const priceRequests = useMemo(() => {
+    if (!wallet) return [];
+    const bySymbol = new Map<string, Transaction>();
+    transactions.forEach((tx) => {
+      const symbol = getDisplaySymbol(tx.token_symbol, wallet.chain_type, networkChainId).toUpperCase();
+      if (!bySymbol.has(symbol)) bySymbol.set(symbol, tx);
+    });
+    return Array.from(bySymbol.entries()).map(([symbol, tx]) => ({
+      chain_type: wallet.chain_type,
+      chain_id: networkChainId,
+      token_address: tx.token_address,
+      symbol,
+    }));
+  }, [wallet, transactions, networkChainId]);
+  const { prices } = useAssetPrices(priceRequests);
 
 
 
@@ -419,6 +437,9 @@ export const TransactionsPage: React.FC = () => {
                 const displayAmount = isCancellation
                   ? "-"
                   : `${formatBalance(tx.amount, tx.token_decimals ?? 18, 8)} ${symbol}`;
+                const price = prices[symbol.toUpperCase()]?.usd;
+                const decimals = tx.token_decimals ?? (wallet.chain_type === "BTC" ? 8 : 18);
+                const fiatValue = price == null ? null : atomicToNumber(tx.amount, decimals) * price;
                 const variant = TX_STATUS_VARIANT[tx.status] || "default";
                 const label = statusLabelMap[tx.status] || tx.status;
                 const showDot = TX_STATUS_DOT.has(tx.status);
@@ -477,6 +498,9 @@ export const TransactionsPage: React.FC = () => {
                           <span className="font-mono font-medium">
                             {displayAmount}
                           </span>
+                          {fiatValue != null && (
+                            <span className="text-xs tabular-nums text-[var(--muted)]">≈ {formatUsd(fiatValue, language)}</span>
+                          )}
                         </div>
                       )}
                     </TableCell>

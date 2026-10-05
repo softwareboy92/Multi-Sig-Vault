@@ -371,6 +371,7 @@ export const WalletDetailPage: React.FC = () => {
                   onSync={syncAssets}
                   onImportToken={importToken}
                   maxDisplay={20}
+                  chainId={wallet.chain_type === "EVM" ? evmNetworks.get(wallet.network_id)?.chain_id ?? null : null}
                 />
               )}
 

@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 
 // "auto" = follow browser locale; otherwise IANA timezone string
 type TimezonePreference = "auto" | string;
+export type PriceProvider = "defillama" | "okx" | "binance" | "coinmarketcap" | "gateio";
 
 interface PreferenceState {
   showTestnets: boolean;
@@ -17,6 +18,8 @@ interface PreferenceState {
   setTimezone: (value: TimezonePreference) => void;
   uiScalePercent: number;
   setUiScalePercent: (value: number) => void;
+  priceProvider: PriceProvider;
+  setPriceProvider: (value: PriceProvider) => void;
 }
 
 export const usePreferenceStore = create<PreferenceState>()(
@@ -35,6 +38,8 @@ export const usePreferenceStore = create<PreferenceState>()(
       uiScalePercent: 100,
       setUiScalePercent: (value) =>
         set({ uiScalePercent: Math.min(125, Math.max(80, value)) }),
+      priceProvider: "defillama",
+      setPriceProvider: (value) => set({ priceProvider: value }),
     }),
     {
       name: 'preference-storage',

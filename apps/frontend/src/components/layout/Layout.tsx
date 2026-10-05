@@ -101,7 +101,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       </div>
 
       <main className="flex-1 min-w-0 min-h-0 h-full flex flex-col overflow-hidden relative">
-        <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar overscroll-contain">
+        <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar overscroll-contain [scrollbar-gutter:stable] [overflow-anchor:none]">
           <div
             className="mx-auto flex w-full max-w-[100rem] flex-col gap-[var(--section-gap)] px-[var(--page-gutter)] py-[var(--section-gap)] sm:w-[96%]"
           >

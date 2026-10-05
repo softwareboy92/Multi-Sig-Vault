@@ -23,12 +23,13 @@ import { useToastStore } from "../stores/useToastStore";
 import { usePreferenceStore } from "../stores/usePreferenceStore";
 import { useAdaptivePageSize } from "../hooks/useAdaptivePageSize";
 import { getNetworks, getWalletAssets, getWallets } from "../api";
-import type { NetworkConfig, Wallet } from "../types";
+import type { Asset, NetworkConfig, Wallet } from "../types";
 import { CopyButton } from "../components/ui/CopyButton";
-import { getWalletChainLabel, getNativeSymbol, isWalletTestnet } from "../utils/wallet";
-import { formatBalance } from "../utils/format";
+import { getWalletChainLabel, isWalletTestnet } from "../utils/wallet";
 import { WALLET_STATUS_VARIANT } from "../utils/status-variants";
 import { useWalletTagStore } from "../stores/useWalletTagStore";
+import { useAssetPrices } from "../hooks/useAssetPrices";
+import { atomicToNumber, formatUsd } from "../utils/price";
 
 type WalletViewMode = "LIST" | "NETWORK" | "TAG";
 
@@ -64,10 +65,8 @@ export const WalletPage: React.FC = () => {
   const [btcNetworksAll, setBtcNetworksAll] = useState<NetworkConfig[]>([]);
   const { showTestnets } = usePreferenceStore();
 
-  // --- Balance cache (wallet_id → { balance, symbol }) ---
-  const [balanceMap, setBalanceMap] = useState<
-    Record<string, { balance: string; symbol: string; decimals: number } | null>
-  >({});
+  // --- Asset cache (wallet_id → all assets) ---
+  const [assetMap, setAssetMap] = useState<Record<string, Asset[] | null>>({});
 
   // --- Static maps ---
   const statusLabelMap: Record<string, string> = {
@@ -114,6 +113,26 @@ export const WalletPage: React.FC = () => {
           ),
     [wallets, showTestnets, evmNetworkMap, btcNetworkMap],
   );
+
+  const priceRequests = useMemo(() => {
+    const seen = new Set<string>();
+    return visibleWallets.flatMap((wallet) => {
+      const assets = assetMap[wallet.id];
+      if (!assets) return [];
+      return assets.flatMap((asset) => {
+        const symbol = asset.symbol.toUpperCase();
+        if (seen.has(symbol)) return [];
+        seen.add(symbol);
+        return [{
+          chain_type: wallet.chain_type,
+          chain_id: wallet.chain_type === "EVM" ? evmNetworkMap.get(wallet.network_id)?.chain_id ?? null : null,
+          token_address: asset.token_address,
+          symbol,
+        }];
+      });
+    });
+  }, [visibleWallets, assetMap, evmNetworkMap]);
+  const { prices } = useAssetPrices(priceRequests);
 
   const networkOptions = useMemo(() => {
     const usedNetworkIds = new Set(visibleWallets.map((w) => w.network_id));
@@ -220,28 +239,13 @@ export const WalletPage: React.FC = () => {
     let cancelled = false;
 
     const loadBalances = async () => {
-      const results: Record<
-        string,
-        { balance: string; symbol: string; decimals: number } | null
-      > = {};
+      const results: Record<string, Asset[] | null> = {};
 
       await Promise.allSettled(
         activeWallets.map(async (w) => {
           try {
             const assets = await getWalletAssets(w.id);
-            const native = assets?.find((a) => a.is_native);
-            if (native) {
-              const evmChainId = w.chain_type === "EVM"
-                ? evmNetworksAll.find((n) => n.id === w.network_id)?.chain_id ?? null
-                : null;
-              results[w.id] = {
-                balance: native.balance,
-                symbol: native.symbol || getNativeSymbol(w.chain_type, evmChainId),
-                decimals: native.decimals,
-              };
-            } else {
-              results[w.id] = null;
-            }
+            results[w.id] = assets ?? [];
           } catch {
             results[w.id] = null;
           }
@@ -249,7 +253,7 @@ export const WalletPage: React.FC = () => {
       );
 
       if (!cancelled) {
-        setBalanceMap((prev) => ({ ...prev, ...results }));
+        setAssetMap((prev) => ({ ...prev, ...results }));
       }
     };
 
@@ -257,7 +261,7 @@ export const WalletPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [visibleWallets, evmNetworksAll]);
+  }, [visibleWallets, wallets.length]);
 
   // --- Modal handlers ---
   const openReceiveModal = (wallet: Wallet) => {
@@ -364,21 +368,23 @@ export const WalletPage: React.FC = () => {
   // --- Render helpers ---
   const renderBalanceCell = (wallet: Wallet) => {
     if (wallet.status !== "ACTIVE") return <span className="text-[var(--muted)]">—</span>;
-    const entry = balanceMap[wallet.id];
-    if (entry === undefined) {
+    const assets = assetMap[wallet.id];
+    if (assets === undefined) {
       // Still loading
       return (
         <span className="inline-block w-16 h-4 rounded bg-[var(--row-head-bg)] animate-pulse" />
       );
     }
-    if (entry === null) return <span className="text-[var(--muted)]">—</span>;
-    const formatted = formatBalance(entry.balance, entry.decimals, 6);
+    if (assets === null) return <span className="text-[var(--muted)]">—</span>;
+    const pricedAssets = assets.filter((asset) => prices[asset.symbol.toUpperCase()]?.usd != null);
+    if (assets.length > 0 && pricedAssets.length === 0) {
+      return <span className="inline-block h-4 w-20 animate-pulse rounded bg-[var(--row-head-bg)]" />;
+    }
+    const fiatValue = pricedAssets.reduce((total, asset) => (
+      total + atomicToNumber(asset.balance, asset.decimals) * prices[asset.symbol.toUpperCase()].usd
+    ), 0);
     return (
-      <div className="flex flex-col items-end gap-0.5">
-        <span className="font-mono">
-          {formatted} {entry.symbol}
-        </span>
-      </div>
+      <span className="font-mono font-semibold tabular-nums">{formatUsd(fiatValue)}</span>
     );
   };
 
@@ -400,7 +406,7 @@ export const WalletPage: React.FC = () => {
               <TableRow>
                 <TableHead className="w-[22%]">{t("tableHeaders.wallet")}</TableHead>
                 <TableHead className="w-[22%]">{t("tableHeaders.address")}</TableHead>
-                <TableHead align="right" className="w-[17%]">{t("tableHeaders.balance")}</TableHead>
+                <TableHead align="right" className="w-[17%]">{t("wallet.totalAssetValue")}</TableHead>
                 <TableHead className="w-[15%]">{t("wallet.walletTags")}</TableHead>
                 <TableHead align="center" className="w-[12%]">{t("tableHeaders.status")}</TableHead>
                 <TableHead align="center" className="w-[12%]">{t("tableHeaders.action")}</TableHead>
@@ -677,7 +683,7 @@ export const WalletPage: React.FC = () => {
                   <TableHead className="w-[22%]">{t("tableHeaders.wallet")}</TableHead>
                   <TableHead className="w-[22%]">{t("tableHeaders.address")}</TableHead>
                   <TableHead align="right" className="w-[17%]">
-                    {t("tableHeaders.balance")}
+                    {t("wallet.totalAssetValue")}
                   </TableHead>
                   <TableHead className="w-[15%]">
                     {t("wallet.walletTags")}

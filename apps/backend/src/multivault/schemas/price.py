@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -32,6 +34,7 @@ class BatchPriceRequest(BaseModel):
     assets: list[AssetPriceRequest] = Field(
         ..., min_length=1, max_length=100, description="Assets to query (max 100)"
     )
+    provider: Literal["defillama", "okx", "binance", "coinmarketcap", "gateio"] = "defillama"
 
 
 class BatchPriceResponse(BaseModel):
@@ -41,3 +44,4 @@ class BatchPriceResponse(BaseModel):
     currency: str = Field("USD", description="Price currency")
     stale: bool = Field(False, description="True if prices are from stale cache")
     error: str | None = Field(None, description="Error message if price lookup failed")
+    provider: str = Field("defillama", description="Price service used")

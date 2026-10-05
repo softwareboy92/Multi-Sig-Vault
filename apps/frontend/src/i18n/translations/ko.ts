@@ -28,10 +28,14 @@ export const ko = {
   status: { all: "전체", pendingSign: "서명 대기", pendingBroadcast: "브로드캐스트 대기", completed: "완료" },
   allChains: "전체 체인", allStatus: "전체 상태", processingStatus: "처리 중",
   assets: {
+    pendingTransactions: "대기 중인 거래", confirmedSevenDays: "최근 7일 확인", transactionUnit: "건", estimatedValue: "평가 금액",
+    totalValue: "총 자산 가치", stalePrice: "캐시 가격",
     searchPlaceholder: "자산 또는 지갑 검색", assetDetail: "자산 상세", totalBalance: "총 잔액",
     holdingWallets: "보유 지갑", noFilterResults: "일치하는 자산 없음",
   },
   wallet: {
+    totalAssetValue: "총 자산 가치",
+    unitPrice: "가격", balanceAndValue: "잔액 / 환산 금액", assetSyncedAt: "자산 동기화", priceUpdatedAt: "가격 업데이트", neverSynced: "동기화 안 됨",
     listTitle: "지갑", searchPlaceholder: "지갑 이름 또는 주소 검색", createWallet: "지갑 생성",
     importExisting: "기존 지갑 가져오기", details: "지갑 상세", address: "주소", assets: "자산",
     transactions: "거래", send: "보내기", receive: "받기", balance: "잔액", statusActive: "활성",
@@ -106,6 +110,7 @@ export const ko = {
   },
   settings: {
     title: "설정", networkManagement: "네트워크 관리", preferences: "환경 설정",
+    priceService: "가격 서비스", priceServiceDesc: "USD 가격과 자산 가치에 사용할 시장 데이터 소스를 선택합니다.",
     securitySettings: "보안 설정", transactionSimulation: "거래 시뮬레이션",
     transactionSimulationDesc: "서명 전에 Tenderly로 EVM 거래 실행 결과와 자산 변화를 확인합니다.",
     configured: "설정됨", notConfigured: "설정 안 됨",
