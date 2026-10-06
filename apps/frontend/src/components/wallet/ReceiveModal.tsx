@@ -61,7 +61,7 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
               <>
                 <span className="text-[var(--accent)] font-semibold">
                   <span className="text-sm font-bold">
-                    {wallet.address.slice(0, 6).toUpperCase()}
+                    {wallet.address.slice(0, 6)}
                   </span>
                 </span>
                 <span className="text-[var(--muted)]">
@@ -69,7 +69,7 @@ export const ReceiveModal: React.FC<ReceiveModalProps> = ({
                 </span>
                 <span className="text-[var(--accent)] font-semibold">
                   <span className="text-sm font-bold">
-                    {wallet.address.slice(-4).toUpperCase()}
+                    {wallet.address.slice(-4)}
                   </span>
                 </span>
               </>
