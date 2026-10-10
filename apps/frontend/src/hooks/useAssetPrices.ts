@@ -27,11 +27,15 @@ export function useAssetPrices(assets: AssetPriceRequest[]) {
         }
       })
       .catch(() => {
-        if (!cancelled) setPrices({});
+        if (!cancelled) {
+          setPrices({});
+          setStale(false);
+          setResolvedRequest(`${provider}:${key}`);
+        }
       })
     return () => { cancelled = true; };
   }, [key, provider]);
 
   const isCurrent = resolvedRequest === `${provider}:${key}`;
-  return { prices: assets.length && isCurrent ? prices : {}, stale: isCurrent && stale, provider };
+  return { prices: assets.length && isCurrent ? prices : {}, stale: isCurrent && stale, loading: assets.length > 0 && !isCurrent, provider };
 }

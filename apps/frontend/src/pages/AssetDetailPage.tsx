@@ -64,15 +64,19 @@ export const AssetDetailPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Parse groupKey → (chainType, tokenAddress, symbol)
+  // Parse groupKey → (chainType, networkId, tokenAddress, symbol).
+  // The old three-part URLs remain readable for existing bookmarks.
   const parsed = useMemo(() => {
     if (!groupKey) return null;
     const parts = groupKey.split(":");
     if (parts.length < 3) return null;
     const chainType = parts[0] as "BTC" | "EVM";
-    const tokenAddress = parts[1] === "native" ? null : parts[1];
-    const symbol = parts.slice(2).join(":"); // symbol may contain ":"
-    return { chainType, tokenAddress, symbol };
+    const hasNetwork = parts.length >= 4;
+    const networkId = hasNetwork ? parts[1] : null;
+    const tokenPart = parts[hasNetwork ? 2 : 1];
+    const tokenAddress = tokenPart === "native" ? null : tokenPart;
+    const symbol = parts.slice(hasNetwork ? 3 : 2).join(":"); // symbol may contain ":"
+    return { chainType, networkId, tokenAddress, symbol };
   }, [groupKey]);
 
   const loadData = useCallback(async () => {
@@ -87,11 +91,21 @@ export const AssetDetailPage: React.FC = () => {
       setError(null);
 
       const [walletsResponse, evmNetworks, btcNetworks] = await Promise.all([
-        getWallets(),
+        getWallets({ page: 1, pageSize: 100 }),
         getNetworks("EVM"),
         getNetworks("BTC"),
       ]);
-      const allWallets = walletsResponse.items;
+      const remainingWalletPages = walletsResponse.total_pages > 1
+        ? await Promise.all(
+            Array.from({ length: walletsResponse.total_pages - 1 }, (_, index) =>
+              getWallets({ page: index + 2, pageSize: 100 }),
+            ),
+          )
+        : [];
+      const allWallets = [
+        ...walletsResponse.items,
+        ...remainingWalletPages.flatMap((page) => page.items),
+      ];
 
       const evmMap = new Map<string, { name: string; is_testnet: boolean }>();
       const btcMap = new Map<string, { btc_network: string | undefined; is_testnet: boolean }>();
@@ -113,7 +127,7 @@ export const AssetDetailPage: React.FC = () => {
 
       await Promise.all(
         walletsData
-          .filter((w) => w.chain_type === parsed.chainType)
+          .filter((w) => w.chain_type === parsed.chainType && (!parsed.networkId || w.network_id === parsed.networkId))
           .map(async (wallet) => {
             try {
               const assets = await getWalletAssets(wallet.id);

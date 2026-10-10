@@ -51,6 +51,7 @@ interface AssetWithWallet extends Asset {
   wallet_chain_label: string;
   wallet_chain_type: "BTC" | "EVM";
   wallet_is_testnet: boolean;
+  network_id: string;
   chain_id: number | null;
 }
 
@@ -66,6 +67,7 @@ interface AggregatedAsset {
   total_balance: string;
   wallet_count: number;
   all_testnet: boolean;
+  network_id: string;
   chain_id: number | null;
 }
 
@@ -98,10 +100,11 @@ const CHART_COLORS = [
 /** Build a stable grouping key for an asset across wallets. */
 function buildGroupKey(
   chainType: string,
+  networkId: string,
   tokenAddress: string | null,
   symbol: string
 ): string {
-  return `${chainType}:${tokenAddress || "native"}:${symbol}`;
+  return `${chainType}:${networkId}:${tokenAddress || "native"}:${symbol}`;
 }
 
 const DashboardMetric: React.FC<{
@@ -109,7 +112,8 @@ const DashboardMetric: React.FC<{
   value: number | string;
   unit: string;
   tone: "all" | "btc" | "evm" | "asset";
-}> = ({ label, value, unit, tone }) => {
+  featured?: boolean;
+}> = ({ label, value, unit, tone, featured = false }) => {
   const toneClass = {
     all: "bg-[var(--accent-soft)] text-[var(--accent)] border-[var(--accent)]/25",
     btc: "bg-[color-mix(in_srgb,var(--warning)_12%,var(--panel))] text-[var(--warning)] border-[color-mix(in_srgb,var(--warning)_28%,var(--border))]",
@@ -118,12 +122,12 @@ const DashboardMetric: React.FC<{
   }[tone];
 
   return (
-    <Card className="relative overflow-hidden !p-5">
+    <Card className={`relative overflow-hidden !p-5 ${featured ? "xl:col-span-2 border-[color-mix(in_srgb,var(--accent)_38%,var(--border))] bg-[color-mix(in_srgb,var(--accent-soft)_35%,var(--panel))]" : ""}`}>
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-sm font-semibold text-[var(--muted)]">{label}</p>
           <div className="mt-3 flex items-end gap-2">
-            <strong className="font-mono text-3xl font-extrabold tracking-tight text-[var(--text)]">
+            <strong className={`font-mono font-extrabold tracking-tight text-[var(--text)] ${featured ? "text-4xl" : "text-3xl"}`}>
               {value}
             </strong>
             <span className="pb-1 text-xs font-semibold text-[var(--muted)]">{unit}</span>
@@ -143,6 +147,13 @@ const DashboardMetric: React.FC<{
     </Card>
   );
 };
+
+const SummaryRow: React.FC<{ label: string; value: number | string; tone?: string }> = ({ label, value, tone = "text-[var(--text)]" }) => (
+  <div className="flex items-center justify-between gap-3 border-b border-[var(--border)] py-2.5 last:border-0">
+    <dt className="text-sm text-[var(--muted)]">{label}</dt>
+    <dd className={`font-mono text-base font-bold tabular-nums ${tone}`}>{value}</dd>
+  </div>
+);
 
 // ---------------------------------------------------------------------------
 // Component
@@ -212,7 +223,7 @@ export const DashboardPage: React.FC = () => {
         setWallets(walletsData);
 
         const all: AssetWithWallet[] = [];
-        let failCount = 0;
+        const failedWalletIds = new Set<string>();
         await Promise.all(
           walletsData.map(async (wallet) => {
             try {
@@ -229,11 +240,12 @@ export const DashboardPage: React.FC = () => {
                   wallet_chain_label: chainLabel,
                   wallet_chain_type: wallet.chain_type,
                   wallet_is_testnet: isTestnet,
+                  network_id: wallet.network_id,
                   chain_id: wallet.chain_type === "EVM" ? evmMap.get(wallet.network_id)?.chain_id ?? null : null,
                 });
               });
             } catch {
-              failCount++;
+              failedWalletIds.add(wallet.id);
             }
           })
         );
@@ -257,12 +269,13 @@ export const DashboardPage: React.FC = () => {
                 wallet_address: wallet.address || "",
               }));
             } catch {
+              failedWalletIds.add(wallet.id);
               return [] as DashboardTransaction[];
             }
           }),
         );
 
-        setFailedWalletCount(failCount);
+        setFailedWalletCount(failedWalletIds.size);
         setRawAssets(all);
         setTransactions(transactionResults.flat());
         if (isRefresh) setError(null);
@@ -299,7 +312,7 @@ export const DashboardPage: React.FC = () => {
     >();
 
     for (const a of rawAssets) {
-      const key = buildGroupKey(a.wallet_chain_type, a.token_address, a.symbol);
+      const key = buildGroupKey(a.wallet_chain_type, a.network_id, a.token_address, a.symbol);
       let entry = map.get(key);
       if (!entry) {
         entry = {
@@ -313,6 +326,7 @@ export const DashboardPage: React.FC = () => {
           total_balance: "0",
           wallet_count: 0,
           all_testnet: true,
+          network_id: a.network_id,
           chain_id: a.chain_id,
           balances: [],
           walletIds: new Set(),
@@ -342,6 +356,7 @@ export const DashboardPage: React.FC = () => {
         total_balance: sumBigIntBalances(v.balances),
         wallet_count: v.walletIds.size,
         all_testnet: !v.hasMainnet,
+        network_id: v.network_id,
         chain_id: v.chain_id,
       });
     }
@@ -365,36 +380,80 @@ export const DashboardPage: React.FC = () => {
     })),
     [aggregated],
   );
-  const { prices, stale: pricesStale } = useAssetPrices(priceRequests);
-  const totalPortfolioValue = useMemo(
-    () => aggregated.reduce((total, asset) => {
+  const { prices, stale: pricesStale, loading: pricesLoading } = useAssetPrices(priceRequests);
+  const valuation = useMemo(() => {
+    const holdings = rawAssets.filter((asset) => BigInt(asset.balance || "0") > 0n);
+    const testnetKeys = new Set(
+      rawAssets
+        .filter((asset) => asset.wallet_is_testnet && BigInt(asset.balance || "0") > 0n)
+        .map((asset) => buildGroupKey(asset.wallet_chain_type, asset.network_id, asset.token_address, asset.symbol)),
+    );
+    const assetKeys = new Set<string>();
+    const pricedKeys = new Set<string>();
+    let total = 0;
+    let testnetTotal = 0;
+    for (const asset of holdings) {
+      const key = buildGroupKey(asset.wallet_chain_type, asset.network_id, asset.token_address, asset.symbol);
+      if (!asset.wallet_is_testnet) assetKeys.add(key);
       const price = prices[asset.symbol.toUpperCase()]?.usd;
-      return total + (price ? atomicToNumber(asset.total_balance, asset.decimals) * price : 0);
-    }, 0),
-    [aggregated, prices],
-  );
+      if (price != null && Number.isFinite(price)) {
+        if (!asset.wallet_is_testnet) pricedKeys.add(key);
+        const value = atomicToNumber(asset.balance, asset.decimals) * price;
+        if (asset.wallet_is_testnet) testnetTotal += value;
+        else total += value;
+      }
+    }
+    return { total, testnetTotal, mainnetAssets: assetKeys.size, priced: pricedKeys.size, unpriced: assetKeys.size - pricedKeys.size, testnet: testnetKeys.size };
+  }, [rawAssets, prices]);
 
   const walletStats = useMemo(
     () => ({
       active: wallets.filter((wallet) => wallet.status === "ACTIVE").length,
+      pending: wallets.filter((wallet) => wallet.status === "PENDING_DEPLOY").length,
+      archived: wallets.filter((wallet) => wallet.status === "ARCHIVED").length,
+      btc: wallets.filter((wallet) => wallet.chain_type === "BTC").length,
+      evm: wallets.filter((wallet) => wallet.chain_type === "EVM").length,
     }),
     [wallets],
   );
 
-  const assetDistributionData = useMemo(
-    () =>
-      aggregated
-        .map((asset) => ({
-          name: asset.symbol,
-          value: atomicToNumber(asset.total_balance, asset.decimals) * (prices[asset.symbol.toUpperCase()]?.usd ?? 0),
-        }))
-        .filter((asset) => asset.value > 0)
-        .sort((a, b) => b.value - a.value),
-    [aggregated, prices],
-  );
+  const assetDistributionData = useMemo(() => {
+    const values = new Map<string, number>();
+    const useTestnet = valuation.mainnetAssets === 0;
+    for (const asset of rawAssets) {
+      if (asset.wallet_is_testnet !== useTestnet) continue;
+      const price = prices[asset.symbol.toUpperCase()]?.usd;
+      if (price == null || !Number.isFinite(price)) continue;
+      values.set(asset.symbol, (values.get(asset.symbol) ?? 0) + atomicToNumber(asset.balance, asset.decimals) * price);
+    }
+    return [...values].map(([name, value]) => ({ name, value }))
+      .filter((asset) => asset.value > 0)
+      .sort((a, b) => b.value - a.value);
+  }, [rawAssets, prices, valuation.mainnetAssets]);
+
+  const assetInsights = useMemo(() => {
+    const useTestnet = valuation.mainnetAssets === 0;
+    const holdings = aggregated.filter((asset) =>
+      asset.all_testnet === useTestnet && BigInt(asset.total_balance || "0") > 0n,
+    );
+    const priced = holdings.map((asset) => {
+      const price = prices[asset.symbol.toUpperCase()]?.usd;
+      return { ...asset, value: price != null && Number.isFinite(price)
+        ? atomicToNumber(asset.total_balance, asset.decimals) * price
+        : null };
+    });
+    const chainValues = { BTC: 0, EVM: 0 };
+    for (const asset of priced) {
+      if (asset.value != null) chainValues[asset.chain_type] += asset.value;
+    }
+    const topAssets = priced.filter((asset) => asset.value != null && asset.value > 0)
+      .sort((a, b) => (b.value ?? 0) - (a.value ?? 0)).slice(0, 3);
+    const unpriced = priced.filter((asset) => asset.value == null);
+    return { chainValues, topAssets, unpriced };
+  }, [aggregated, prices, valuation.mainnetAssets]);
 
   const pendingTransactionCount = useMemo(
-    () => transactions.filter((transaction) => ["PENDING_SIGN", "PARTIALLY_SIGNED", "SIGNED", "PENDING_CONFIRMATION"].includes(transaction.status)).length,
+    () => transactions.filter((transaction) => ["PENDING_SIGN", "PARTIALLY_SIGNED", "SIGNED", "BROADCAST", "PENDING_CONFIRMATION"].includes(transaction.status)).length,
     [transactions],
   );
   const confirmedSevenDayCount = useMemo(() => {
@@ -585,12 +644,13 @@ export const DashboardPage: React.FC = () => {
         </span>
       }
     >
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
         <DashboardMetric
-          label={t("assets.totalValue")}
-          value={formatUsd(totalPortfolioValue, language)}
+          label={valuation.mainnetAssets === 0 && valuation.testnet > 0 ? t("assets.testnetReferenceValue") : t("assets.totalValue")}
+          value={pricesLoading || (valuation.mainnetAssets === 0 && valuation.testnet === 0) ? "—" : formatUsd(valuation.mainnetAssets > 0 ? valuation.total : valuation.testnetTotal, language)}
           unit={pricesStale ? t("assets.stalePrice") : "USD"}
           tone="asset"
+          featured
         />
         <DashboardMetric
           label={t("assets.totalWallets")}
@@ -616,6 +676,42 @@ export const DashboardPage: React.FC = () => {
           unit={t("assets.assetUnit")}
           tone="asset"
         />
+      </div>
+
+      <p className="text-xs leading-5 text-[var(--muted)]">{valuation.mainnetAssets === 0 && valuation.testnet > 0 ? t("assets.testnetReferenceHint") : valuation.mainnetAssets === 0 ? t("assets.noMainnetHoldings") : t("assets.valuationScope")}</p>
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Card className="!p-5">
+          <h2 className="title-h3 text-[var(--text)]">{t("assets.chainAllocation")}</h2>
+          <dl className="mt-2">
+            <SummaryRow label="BTC" value={pricesLoading ? "—" : formatUsd(assetInsights.chainValues.BTC, language)} />
+            <SummaryRow label="EVM" value={pricesLoading ? "—" : formatUsd(assetInsights.chainValues.EVM, language)} />
+          </dl>
+          <p className="mt-2 text-xs text-[var(--muted)]">{valuation.mainnetAssets === 0 && valuation.testnet > 0 ? t("assets.testnetAllocationHint") : t("assets.chainAllocationHint")}</p>
+        </Card>
+
+        <Card className="!p-5">
+          <h2 className="title-h3 text-[var(--text)]">{t("assets.topHoldings")}</h2>
+          {pricesLoading ? <p className="mt-4 text-sm text-[var(--muted)]">{t("assets.priceLoading")}</p> : assetInsights.topAssets.length === 0
+            ? <p className="mt-4 text-sm text-[var(--muted)]">{t("assets.noValuationData")}</p>
+            : <div className="mt-2">{assetInsights.topAssets.map((asset) => (
+                <button key={asset.groupKey} type="button" onClick={() => navigate(`/assets/${encodeURIComponent(asset.groupKey)}`)} className="flex w-full items-center justify-between gap-3 border-b border-[var(--border)] py-2.5 text-left last:border-0 hover:text-[var(--accent)] focus-visible:outline-2 focus-visible:outline-[var(--accent)]">
+                  <span className="min-w-0 truncate text-sm">{asset.symbol} <span className="text-xs text-[var(--muted)]">{asset.chain_label}</span></span>
+                  <span className="shrink-0 font-mono text-sm font-bold tabular-nums">{formatUsd(asset.value ?? 0, language)}</span>
+                </button>
+              ))}</div>}
+        </Card>
+
+        <Card className="!p-5">
+          <h2 className="title-h3 text-[var(--text)]">{t("assets.unpricedHoldings")}</h2>
+          {pricesLoading ? <p className="mt-4 text-sm text-[var(--muted)]">{t("assets.priceLoading")}</p> : assetInsights.unpriced.length === 0
+            ? <p className="mt-4 text-sm text-[var(--muted)]">{t("assets.allHoldingsPriced")}</p>
+            : <><p className="mt-2 text-sm text-[var(--warning)]">{t("assets.unpricedHoldingsCount", { count: String(assetInsights.unpriced.length) })}</p>
+                <ul className="mt-2 space-y-2">{assetInsights.unpriced.slice(0, 3).map((asset) => (
+                  <li key={asset.groupKey} className="flex justify-between gap-3 text-sm"><span className="min-w-0 truncate">{asset.symbol} <span className="text-[var(--muted)]">{asset.chain_label}</span></span><span className="shrink-0 font-mono tabular-nums">{formatBalance(asset.total_balance, asset.decimals)} {asset.symbol}</span></li>
+                ))}</ul></>}
+          <p className="mt-3 text-xs text-[var(--muted)]">{pricesStale ? t("assets.priceDataStale") : t("assets.unpricedHoldingsHint")}</p>
+        </Card>
       </div>
 
       <div className="order-2 flex flex-col gap-1">
@@ -785,6 +881,7 @@ export const DashboardPage: React.FC = () => {
                           <span className="text-xs tabular-nums text-[var(--muted)]">
                             {formatUsd(atomicToNumber(asset.total_balance, asset.decimals) * prices[asset.symbol.toUpperCase()].usd, language)}
                             {" · "}{formatUsd(prices[asset.symbol.toUpperCase()].usd, language)}/{asset.symbol}
+                            {asset.all_testnet && ` · ${t("assets.testnetReferenceShort")}`}
                           </span>
                         )}
                       </div>
@@ -809,12 +906,12 @@ export const DashboardPage: React.FC = () => {
         <Card className="!p-5 sm:!p-6">
           <div>
             <h2 className="title-h3 text-[var(--text)]">{t("assets.distributionTitle")}</h2>
-            <p className="mt-1 text-sm leading-6 text-[var(--muted)]">{t("assets.distributionHint")}</p>
+            <p className="mt-1 text-sm leading-6 text-[var(--muted)]">{valuation.mainnetAssets === 0 && valuation.testnet > 0 ? t("assets.testnetDistributionHint") : t("assets.distributionHint")}</p>
           </div>
           <div className="mt-3 h-[280px] w-full">
             {assetDistributionData.length === 0 ? (
               <div className="flex h-full items-center justify-center">
-                <EmptyState title={t("common.noData")} />
+                <EmptyState title={valuation.mainnetAssets === 0 && valuation.testnet > 0 ? t("assets.noPricedTestnetAssets") : t("assets.noValuationData")} />
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
