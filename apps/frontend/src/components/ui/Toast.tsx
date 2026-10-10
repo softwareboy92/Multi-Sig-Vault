@@ -36,10 +36,10 @@ export const Toast: React.FC<ToastProps> = ({
   }, [duration, triggerClose]);
 
   const bgColor = {
-    success: "bg-[var(--success)]",
-    error: "bg-[var(--danger)]",
-    warning: "bg-[var(--warning)]",
-    info: "bg-[var(--info)]",
+    success: "bg-[var(--toast-success)]",
+    error: "bg-[var(--toast-danger)]",
+    warning: "bg-[var(--toast-warning)]",
+    info: "bg-[var(--toast-info)]",
   }[type];
 
   const icon = {
@@ -51,11 +51,11 @@ export const Toast: React.FC<ToastProps> = ({
 
   return (
     <div
-      className={`${bgColor} text-white px-4 py-3 rounded-[var(--radius-modal)] shadow-[var(--shadow-overlay)] flex items-center gap-3 min-w-[280px] max-w-[400px] relative overflow-hidden ${
+      className={`${bgColor} text-[var(--toast-text)] px-4 py-3 rounded-[var(--radius-modal)] shadow-[var(--shadow-overlay)] flex items-center gap-3 min-w-[280px] max-w-[400px] relative overflow-hidden ${
         exiting ? "animate-slide-out-right" : "animate-slide-in-right"
       }`}
     >
-      <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-sm font-bold flex-shrink-0">
+      <div className="w-5 h-5 rounded-full bg-current/15 flex items-center justify-center text-sm font-bold flex-shrink-0">
         {icon}
       </div>
       <p className="text-sm font-medium flex-1">{message}</p>
@@ -69,13 +69,14 @@ export const Toast: React.FC<ToastProps> = ({
       )}
       <button
         onClick={() => triggerClose()}
-        className="w-5 h-5 flex items-center justify-center text-white/80 hover:text-white transition-colors flex-shrink-0"
+        aria-label="Close notification"
+        className="w-5 h-5 flex items-center justify-center opacity-80 hover:opacity-100 transition-opacity flex-shrink-0"
       >
         ×
       </button>
       {duration > 0 && (
         <div
-          className="absolute bottom-0 left-0 h-0.5 bg-white/30 rounded-b"
+          className="absolute bottom-0 left-0 h-0.5 bg-current/30 rounded-b"
           style={{ animation: `toast-shrink ${duration}ms linear forwards` }}
         />
       )}

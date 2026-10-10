@@ -33,7 +33,7 @@ function CustomTooltip({ active, payload }: { active?: boolean; payload?: Array<
   if (!active || !payload?.length) return null;
   const { name, value } = payload[0];
   return (
-    <div className="rounded-lg bg-gray-900 px-3 py-2 text-sm text-white shadow-lg dark:bg-gray-700">
+    <div className="rounded-lg border border-[var(--border)] bg-[var(--overlay-bg)] px-3 py-2 text-sm text-[var(--text)] shadow-lg">
       <p className="font-medium">{name}</p>
       <p>{formatValue(value)}</p>
     </div>
@@ -44,7 +44,7 @@ export function DonutChart({ data, total, size = 200 }: DonutChartProps) {
   if (!data.length) {
     return (
       <div
-        className="flex items-center justify-center text-sm text-gray-400"
+        className="flex items-center justify-center text-sm text-[var(--muted)]"
         style={{ width: size, height: size }}
       >
         No data
@@ -74,8 +74,8 @@ export function DonutChart({ data, total, size = 200 }: DonutChartProps) {
       </ResponsiveContainer>
       {total != null && (
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-          <span className="text-xs text-gray-500 dark:text-gray-400">Total</span>
-          <span className="text-sm font-semibold text-gray-900 dark:text-white">
+          <span className="text-xs text-[var(--muted)]">Total</span>
+          <span className="text-sm font-semibold text-[var(--text)]">
             {formatValue(total)}
           </span>
         </div>

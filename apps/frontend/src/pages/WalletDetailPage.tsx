@@ -294,8 +294,8 @@ export const WalletDetailPage: React.FC = () => {
           />
 
           {isEvmPendingDeploy && pendingActivation && (
-            <Card className="space-y-3 border-amber-300/50 bg-amber-50 p-4">
-              <p className="text-sm text-amber-900">
+            <Card className="space-y-3 border-[color-mix(in_srgb,var(--warning)_40%,var(--border))] bg-[color-mix(in_srgb,var(--warning)_10%,var(--panel))] p-4">
+              <p className="text-sm text-[var(--text)]">
                 {t("wallet.recoverActivation", {
                   hash: truncateAddress(pendingActivation.txHash),
                 })}

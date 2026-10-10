@@ -44,26 +44,19 @@ export const TableHead: React.FC<TableHeadProps> = ({
   const alignClass =
     align === "center" ? "text-center" : align === "right" ? "text-right" : "text-left";
 
-  const handleClick = () => {
-    if (sortable && sortKey && onSort) {
-      onSort(sortKey);
-    }
-  };
+  const canSort = Boolean(sortable && sortKey && onSort);
 
   return (
     <th
       colSpan={colSpan}
       className={`px-[clamp(1rem,1.4vw,1.35rem)] py-4 text-[clamp(0.8rem,0.77rem+0.1vw,0.9rem)] font-bold text-[var(--row-head-text)] tracking-[0.02em] ${alignClass} ${
-        sortable ? "cursor-pointer select-none hover:text-[var(--text)] transition-colors" : ""
+        canSort ? "select-none" : ""
       } ${className}`}
-      onClick={sortable ? handleClick : undefined}
+      aria-sort={canSort ? (sortDirection === "asc" ? "ascending" : sortDirection === "desc" ? "descending" : "none") : undefined}
     >
-      <span className="inline-flex items-center gap-1">
+      {canSort ? <button type="button" onClick={() => onSort?.(sortKey!)} className="inline-flex items-center gap-1 cursor-pointer hover:text-[var(--text)] focus-visible:outline-2 focus-visible:outline-[var(--accent)]">{children}<span aria-hidden="true" className="text-[var(--accent)]">{sortDirection === "asc" ? "▲" : sortDirection === "desc" ? "▼" : "↕"}</span></button> : <span className="inline-flex items-center gap-1">
         {children}
-        {sortable && sortDirection === "asc" && <span className="text-[var(--accent)]">▲</span>}
-        {sortable && sortDirection === "desc" && <span className="text-[var(--accent)]">▼</span>}
-        {sortable && sortDirection == null && <span className="opacity-0 group-hover:opacity-30">▲</span>}
-      </span>
+      </span>}
     </th>
   );
 };

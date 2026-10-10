@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTransition } from "../../hooks/useTransition";
 
@@ -41,6 +41,7 @@ export const SelectMenu: React.FC<SelectMenuProps> = ({
   const [menuPosition, setMenuPosition] = useState<MenuPosition | null>(null);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const menuId = useId();
   const isPlaceholder = placeholderValue !== undefined && value === placeholderValue;
   const { mounted: menuMounted, visible: menuVisible } = useTransition(open, 150);
 
@@ -108,8 +109,19 @@ export const SelectMenu: React.FC<SelectMenuProps> = ({
 
   useEffect(() => {
     if (!open) return;
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setOpen(false);
+      buttonRef.current?.focus();
+    };
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [open]);
 
-    updateMenuPosition();
+  useEffect(() => {
+    if (!open) return;
+
     window.addEventListener("resize", updateMenuPosition);
     window.addEventListener("scroll", updateMenuPosition, true);
     return () => {
@@ -125,6 +137,34 @@ export const SelectMenu: React.FC<SelectMenuProps> = ({
     setOpen(next);
   };
 
+  const focusOption = (index: number) => {
+    requestAnimationFrame(() => {
+      menuRef.current?.querySelectorAll<HTMLButtonElement>("button[data-option]")[index]?.focus();
+    });
+  };
+
+  const handleTriggerKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+    event.preventDefault();
+    if (!open) {
+      updateMenuPosition();
+      setOpen(true);
+    }
+    focusOption(event.key === "ArrowDown" ? 0 : options.length - 1);
+  };
+
+  const handleOptionKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      focusOption((index + (event.key === "ArrowDown" ? 1 : -1) + options.length) % options.length);
+    } else if (event.key === "Home" || event.key === "End") {
+      event.preventDefault();
+      focusOption(event.key === "Home" ? 0 : options.length - 1);
+    } else if (event.key === "Tab") {
+      setOpen(false);
+    }
+  };
+
   return (
     <div className="field">
       {label && <label className="field-label">{label}</label>}
@@ -133,6 +173,11 @@ export const SelectMenu: React.FC<SelectMenuProps> = ({
           ref={buttonRef}
           type="button"
           onClick={toggleOpen}
+          onKeyDown={handleTriggerKeyDown}
+          aria-expanded={open}
+          aria-controls={menuId}
+          aria-haspopup="listbox"
+          aria-label={label}
           disabled={disabled}
           className={`field-control w-full flex items-center justify-between gap-3 text-[var(--font-body)] ${
             isPlaceholder ? "select-placeholder text-[var(--field-muted)]" : "text-[var(--field-text)]"
@@ -155,7 +200,11 @@ export const SelectMenu: React.FC<SelectMenuProps> = ({
       </div>
       {menuMounted && menuPosition && createPortal(
         <div
+          id={menuId}
+          data-escape-handled
           ref={menuRef}
+          role="listbox"
+          aria-label={label}
           style={menuPosition}
           className={`overlay-surface fixed z-[1000] max-h-56 overflow-y-auto rounded-xl border border-[var(--border)] shadow-[var(--shadow-overlay)] custom-scrollbar ${
             dropUp ? "origin-bottom" : "origin-top"
@@ -163,11 +212,16 @@ export const SelectMenu: React.FC<SelectMenuProps> = ({
         >
           {options.map((option, idx) => (
             <button
+              data-option
+              role="option"
+              aria-selected={option.value === value}
               key={`${idx}-${option.value}`}
               type="button"
+              onKeyDown={(event) => handleOptionKeyDown(event, idx)}
               onClick={() => {
                 onChange(option.value);
                 setOpen(false);
+                buttonRef.current?.focus();
               }}
               className={`flex w-full items-center gap-2 px-3 py-2.5 text-left text-[var(--font-body)] leading-tight transition-colors hover:bg-[var(--row-head-bg)] ${
                 option.value === value

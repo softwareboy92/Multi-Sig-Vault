@@ -1,5 +1,6 @@
-import React, { useEffect } from "react";
+import React from "react";
 import { useTransition } from "../../hooks/useTransition";
+import { useOverlayFocus } from "../../hooks/useOverlayFocus";
 
 interface ModalProps {
   isOpen: boolean;
@@ -23,29 +24,7 @@ export const Modal: React.FC<ModalProps> = ({
   panelClassName = "",
 }) => {
   const { mounted, visible } = useTransition(isOpen, 150);
-
-  // Lock body scroll
-  useEffect(() => {
-    document.body.style.overflow = isOpen ? "hidden" : "unset";
-    return () => {
-      document.body.style.overflow = "unset";
-    };
-  }, [isOpen]);
-
-  // Escape key to close — only topmost modal should respond
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.stopImmediatePropagation();
-        onClose();
-      }
-    };
-    // Capture phase not needed: later-registered listeners (topmost modal)
-    // run first when using stopImmediatePropagation.
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose]);
+  const panelRef = useOverlayFocus(isOpen, onClose);
 
   if (!mounted) return null;
 
@@ -57,6 +36,11 @@ export const Modal: React.FC<ModalProps> = ({
       onClick={onClose}
     >
       <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title || "Dialog"}
+        tabIndex={-1}
         className={`glass-surface flex max-h-[88dvh] w-full flex-col rounded-[var(--radius-modal)] border border-[var(--border)] bg-[var(--panel)] shadow-[var(--shadow-overlay)] ${panelClassName} ${
           visible ? "animate-scale-in" : "animate-scale-out"
         }`}
@@ -68,7 +52,9 @@ export const Modal: React.FC<ModalProps> = ({
             <h3 className="title-h3 text-[var(--text)]">{title}</h3>
             {showCloseButton && (
               <button
+                type="button"
                 onClick={onClose}
+                aria-label="Close"
                 className="w-8 h-8 rounded-lg border border-[var(--border)] flex items-center justify-center text-[var(--text)] hover:bg-[var(--row-head-bg)] transition-colors"
               >
                 ×
